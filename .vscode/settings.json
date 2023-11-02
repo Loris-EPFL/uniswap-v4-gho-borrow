@@ -11,10 +11,12 @@
     "@prb/test/=lib/prb-test/src/",
     "forge-std/=lib/forge-std/src/",
     "@uniswap/v4-core/=lib/v4-periphery/lib/v4-core/",
+    "@uniswap/core-v4/=lib/v4-core/",
     "@uniswap-periphery/v4-periphery/=lib/v4-periphery/",
     "src/=src/",
-    "@aave/v3-core/=lib/aave-v3-core/contracts/",
-    "@aave/v3-periphery/=lib/aave-v3-periphery/contracts/",
-    "@openzeppelin/=lib/openzeppelin-contracts/"
+    "@aave/core-v3/=lib/aave-v3-core/",
+    "@aave/v3-periphery/=lib/aave-v3-periphery/",
+    "@openzeppelin/=lib/openzeppelin-contracts/",
+    "@aave/gho/=lib/gho-core/src/contracts/"
   ]
 }

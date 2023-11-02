@@ -21,9 +21,7 @@ contract debtHandler {
 
     constructor(IPoolManager _poolManager, address tokenA_, address tokenB_) {
     poolManager = _poolManager;
-    poolManager.beforeInitialize(
-        //do the logic with credit delegation in here (delegate credit to a creditHandler contract)
-        );
+    
         
     tokenA = tokenA_;
     tokenB = tokenB_;

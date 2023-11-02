@@ -6,10 +6,10 @@ import {BaseHook} from "@uniswap-periphery/v4-periphery/contracts/BaseHook.sol";
 
 import {Hooks} from "@uniswap/v4-core/contracts/libraries/Hooks.sol";
 import {IPoolManager} from "@uniswap/v4-core/contracts/interfaces/IPoolManager.sol";
-import {PoolKey} from "@uniswap/v4-core/contracts/types/PoolKey.sol";
-import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/contracts/types/PoolId.sol";
+import {PoolKey} from "@uniswap/core-v4/contracts/types/PoolKey.sol";
+import {PoolId, PoolIdLibrary} from "@uniswap/core-v4/contracts/types/PoolId.sol";
 import {BalanceDelta} from "@uniswap/v4-core/contracts/types/BalanceDelta.sol";
-import {Currency, CurrencyLibrary} from "@uniswap/v4-core/contracts/types/Currency.sol";
+import {Currency, CurrencyLibrary} from "@uniswap/core-v4/contracts/types/Currency.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "forge-std/console.sol";
@@ -39,9 +39,7 @@ contract UniswapPool {
 
     constructor(IPoolManager _poolManager, address tokenA_, address tokenB_) {
         poolManager = _poolManager;
-        poolManager.beforeInitialize(
-           //do the logic with credit delegation in here (delegate credit to a creditHandler contract)
-            );
+       
             
         tokenA = tokenA_;
         tokenB = tokenB_;

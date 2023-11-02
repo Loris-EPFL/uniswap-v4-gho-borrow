@@ -7,8 +7,8 @@ import { StdCheats } from "forge-std/StdCheats.sol";
 
 import { PoolManager, Currency } from "@uniswap/v4-core/contracts/PoolManager.sol";
 import { TickMath } from "@uniswap/v4-core/contracts/libraries/TickMath.sol";
-import { Fees } from "@uniswap/v4-core/contracts/libraries/Fees.sol";
-import { CurrencyLibrary } from "@uniswap/v4-core/contracts/libraries/CurrencyLibrary.sol";
+import { Fees } from "@uniswap/core-v4/contracts/Fees.sol";
+import { CurrencyLibrary } from "@uniswap/core-v4/contracts/types/Currency.sol";
 import { TestERC20 } from "@uniswap/v4-core/contracts/test/TestERC20.sol";
 import {
     IPoolManager, Hooks, IHooks, BaseHook, BalanceDelta

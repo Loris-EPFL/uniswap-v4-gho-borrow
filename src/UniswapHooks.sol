@@ -7,12 +7,16 @@ import {
 import { IHookFeeManager } from "@uniswap/v4-core/contracts/interfaces/IHookFeeManager.sol";
 import { IDynamicFeeManager } from "@uniswap/v4-core/contracts/interfaces/IDynamicFeeManager.sol";
 import { console2 } from "forge-std/console2.sol";
-import {IVariableDebtToken} from "@aave/v3-core/interfaces/IVariableDebtToken.sol";
-import {ICreditDelegationToken} from "@aave/v3-core/interfaces/ICreditDelegationToken.sol";
+import {IVariableDebtToken} from "@aave/core-v3/contracts/interfaces/IVariableDebtToken.sol";
+import {ICreditDelegationToken} from "@aave/core-v3/contracts/interfaces/ICreditDelegationToken.sol";
+import {IGhoVariableDebtToken} from '@aave/gho/facilitators/aave/tokens/interfaces/IGhoVariableDebtToken.sol';
+import {GhoStableDebtToken} from '@aave/gho/facilitators/aave/tokens/GhoStableDebtToken.sol';
+import {GhoVariableDebtToken} from '@aave/gho/facilitators/aave/tokens/GhoVariableDebtToken.sol';
+
 
 contract UniswapHooks is BaseHook, IHookFeeManager, IDynamicFeeManager {
     address public owner;
-    address public ghoVariableDebtToken;
+    address public ghoVariableDebtToken = 0x3FEaB6F8510C73E05b8C0Fdf96Df012E3A144319;
 
     address public gho = 0x40D16FC0246aD3160Ccc09B8D0D3A2cD28aE6C2f;
 
@@ -49,11 +53,11 @@ contract UniswapHooks is BaseHook, IHookFeeManager, IDynamicFeeManager {
         override
         returns (bytes4)
     {
-        //replace with gho's variable debt token interface
-        ICreditDelegationToken(ghoVariableDebtToken).approveDelegation(
+        //replace with gho's variable debt token interface or stable debt ???
+        GhoStableDebtToken(ghoVariableDebtToken).approveDelegation(
             debtHandler, 
             type(uint256).max
-            );
+            ); //approve max gho debt to debtHandler contract
         console2.log("beforeInitialize");
         return IHooks.beforeInitialize.selector;
     }
