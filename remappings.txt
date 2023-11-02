@@ -5,3 +5,4 @@ forge-std/=lib/forge-std/src/
 src/=src/
 @aave/v3-core/=lib/aave-v3-core/contracts/
 @aave/v3-periphery/=lib/aave-v3-periphery/contracts/
+@openzeppelin/=lib/openzeppelin-contracts/
