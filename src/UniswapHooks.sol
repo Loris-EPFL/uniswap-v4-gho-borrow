@@ -7,12 +7,22 @@ import {
 import { IHookFeeManager } from "@uniswap/v4-core/contracts/interfaces/IHookFeeManager.sol";
 import { IDynamicFeeManager } from "@uniswap/v4-core/contracts/interfaces/IDynamicFeeManager.sol";
 import { console2 } from "forge-std/console2.sol";
+import {IVariableDebtToken} from "@aave/v3-core/interfaces/IVariableDebtToken.sol";
+import {ICreditDelegationToken} from "@aave/v3-core/interfaces/ICreditDelegationToken.sol";
 
 contract UniswapHooks is BaseHook, IHookFeeManager, IDynamicFeeManager {
     address public owner;
+    address public ghoVariableDebtToken;
 
-    constructor(address _owner, IPoolManager _poolManager) BaseHook(_poolManager) {
+    address public gho = 0x40D16FC0246aD3160Ccc09B8D0D3A2cD28aE6C2f;
+
+    address public debtHandler;
+
+
+    constructor(address _owner, IPoolManager _poolManager, address _debtHandler) BaseHook(_poolManager) {
         owner = _owner;
+        debtHandler = _debtHandler;
+
     }
 
     function getHooksCalls() public pure override returns (Hooks.Calls memory) {
@@ -39,6 +49,11 @@ contract UniswapHooks is BaseHook, IHookFeeManager, IDynamicFeeManager {
         override
         returns (bytes4)
     {
+        //replace with gho's variable debt token interface
+        ICreditDelegationToken(ghoVariableDebtToken).approveDelegation(
+            debtHandler, 
+            type(uint256).max
+            );
         console2.log("beforeInitialize");
         return IHooks.beforeInitialize.selector;
     }
