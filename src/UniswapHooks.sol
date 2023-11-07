@@ -49,7 +49,6 @@ contract UniswapHooks is BaseHook, IHookFeeManager, IDynamicFeeManager {
         uint160 // sqrtPriceX96
     )
         external
-        pure
         override
         returns (bytes4)
     {

@@ -4,8 +4,9 @@ pragma solidity >=0.8.19;
 import { IPoolManager, UniswapHooks } from "./UniswapHooks.sol";
 
 contract UniswapHooksFactory {
+    address public debtHandler;
     function deploy(address owner, IPoolManager poolManager, bytes32 salt) external returns (address) {
-        return address(new UniswapHooks{salt: salt}(owner, poolManager));
+        return address(new UniswapHooks{salt: salt}(owner, poolManager, debtHandler));
     }
 
     function getPrecomputedHookAddress(

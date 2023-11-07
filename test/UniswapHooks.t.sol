@@ -91,11 +91,12 @@ contract UniswapHooksTest is PRBTest, StdCheats {
             return;
         }
 
-        token.transfer(address(poolManager), uint256(unsettledTokenBalance));
+        //token.transfer(address(poolManager), uint256(unsettledTokenBalance));
         poolManager.settle(token);
     }
 
     function _getPoolKey() private view returns (IPoolManager.PoolKey memory) {
+        /*
         return IPoolManager.PoolKey({
             currency0: Currency.wrap(address(token1)),
             currency1: Currency.wrap(address(token2)),
@@ -103,6 +104,7 @@ contract UniswapHooksTest is PRBTest, StdCheats {
             tickSpacing: 1,
             hooks: IHooks(deployedHooks)
         });
+        */
     }
 
     function _doesAddressStartWith(address _address, uint160 _prefix) private pure returns (bool) {
