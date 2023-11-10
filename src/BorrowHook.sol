@@ -14,19 +14,21 @@ import {GhoStableDebtToken} from '@aave/gho/facilitators/aave/tokens/GhoStableDe
 import {GhoVariableDebtToken} from '@aave/gho/facilitators/aave/tokens/GhoVariableDebtToken.sol';
 
 
-contract UniswapHooks is BaseHook, IHookFeeManager, IDynamicFeeManager {
+contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
     address public owner;
     address public ghoVariableDebtToken = 0x3FEaB6F8510C73E05b8C0Fdf96Df012E3A144319;
 
     address public gho = 0x40D16FC0246aD3160Ccc09B8D0D3A2cD28aE6C2f;
-
     address public debtHandler;
 
+    mapping(address => uint256) public userDebt;    //user debt
+    mapping(address => uint256) public userCollateral; //user collateral
 
-    constructor(address _owner, IPoolManager _poolManager, address _debtHandler) BaseHook(_poolManager) {
+    mapping(address => bool) public isUserLiquidable; //flag to see if user is liquidable
+
+
+    constructor(address _owner, IPoolManager _poolManager) BaseHook(_poolManager) {
         owner = _owner;
-        debtHandler = _debtHandler;
-
     }
 
     function getHooksCalls() public pure override returns (Hooks.Calls memory) {
@@ -53,10 +55,11 @@ contract UniswapHooks is BaseHook, IHookFeeManager, IDynamicFeeManager {
         returns (bytes4)
     {
         //replace with gho's variable debt token interface or stable debt ???
-        GhoStableDebtToken(ghoVariableDebtToken).approveDelegation(
+        /*ICreditDelegationToken(ghoVariableDebtToken).approveDelegation(
             debtHandler, 
             type(uint256).max
             ); //approve max gho debt to debtHandler contract
+        */
         console2.log("beforeInitialize");
         return IHooks.beforeInitialize.selector;
     }
