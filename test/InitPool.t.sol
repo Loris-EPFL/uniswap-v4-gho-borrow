@@ -65,8 +65,11 @@ contract InitPoolTest is PRBTest, StdCheats{
 
         AavePool.supply(WETH, 1e18, alice,0);
         AavePool.supply(USDC, 1000e6, alice,0);
-        console2.log(aeth.balanceOf(alice));
-        console2.log(ausdc.balanceOf(alice));
+        console2.log("Alices Aeth" , aeth.balanceOf(alice));
+        console2.log("Alices Ausdc", ausdc.balanceOf(alice));
+        AavePool.borrow(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48, 10, 2, 0, alice);
+        console2.log(ERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48).balanceOf(alice));
+
         vm.stopPrank();
     }
     /*

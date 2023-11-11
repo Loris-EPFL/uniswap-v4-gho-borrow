@@ -73,6 +73,8 @@ contract UniswapHooksTest is PRBTest, StdCheats {
                 //call the mint token helper function to freemint tokens
                 _mintTokens();
 
+
+
                 console2.log("Token1 address", address(token1));
                 console2.log("Token1 balance", token1.balanceOf(address(this)));
                 console2.log("Token2 address", address(token2));
@@ -80,9 +82,12 @@ contract UniswapHooksTest is PRBTest, StdCheats {
                 token1.approve(address(poolManager), type(uint256).max);
                 token2.approve(address(poolManager), type(uint256).max);
 
+
                 // sqrt(2) = 79_228_162_514_264_337_593_543_950_336 as Q64.96
                 poolManager.initialize(_getPoolKey(), 79_228_162_514_264_337_593_543_950_336);
                 poolManager.lock(new bytes(0));
+                //poolManager.modifyPosition(key, IPoolManager.ModifyPositionParams(TickMath.MIN_TICK, TickMath.MAX_TICK, 100));
+
 
                 return;
             }
@@ -95,12 +100,12 @@ contract UniswapHooksTest is PRBTest, StdCheats {
         IPoolManager.PoolKey memory key = _getPoolKey();
 
         // lets execute all remaining hooks
-        poolManager.modifyPosition(key, IPoolManager.ModifyPositionParams(TickMath.MIN_TICK, TickMath.MAX_TICK, 1000));
-        poolManager.donate(key, 100, 100);
+        poolManager.modifyPosition(key, IPoolManager.ModifyPositionParams(TickMath.MIN_TICK, TickMath.MAX_TICK, 10000));
+        poolManager.donate(key, 1000, 1000);
 
         // opposite action: poolManager.swap(key, IPoolManager.SwapParams(true, 100, TickMath.MIN_SQRT_RATIO * 1000));
         poolManager.swap(key, IPoolManager.SwapParams(false, 100, TickMath.MAX_SQRT_RATIO / 1000));
-
+        console2.log("swap done");
         _settleTokenBalance(Currency.wrap(address(Aeth)));
         _settleTokenBalance(Currency.wrap(address(Ausdc)));
 
@@ -158,4 +163,15 @@ contract UniswapHooksTest is PRBTest, StdCheats {
         console2.log(ausdc.balanceOf(address(this)));
     
     }
+
+/*
+    function addLiquidity(int24 tickLower, int24 tickUpper, int256 amount) internal {
+        _mintTokens();
+        IERC20Minimal(Aeth).approve(address(modifyPositionRouter), 10 ** 18);
+        IERC20Minimal(Ausdc).approve(address(modifyPositionRouter), 10 ** 18);
+        modifyPositionRouter.modifyPosition(
+            key, IPoolManager.ModifyPositionParams(tickLower, tickUpper, amount), ZERO_BYTES
+        );
+    }
+*/
 }
