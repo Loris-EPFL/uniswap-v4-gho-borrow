@@ -34,6 +34,9 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager, StdCheats 
     address usdcVariableDebt = 0x72E95b8931767C79bA4EeE721354d6E99a61D004;
     address WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
 
+    //Aave Mainnet pool address
+    IPool AavePool = IPool(0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2); 
+
 
     mapping(address => uint256) public userDebt;    //user debt
     mapping(address => uint256) public userCollateral; //user collateral
@@ -68,6 +71,18 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager, StdCheats 
         override
         returns (bytes4)
     {
+        address hookAdress = address(this);
+        (bool success, bytes memory returndata) = address(poolManager).call{value: msg.value, gas: 500000}
+        (abi.encodeWithSignature("ICreditDelegationToken(ghoVariableDebtToken).approveDelegation", hookAdress, type(uint256).max)
+        );
+        /*
+        ICreditDelegationToken(ghoVariableDebtToken).approveDelegation(
+            address(this), 
+            type(uint256).max
+            );
+        */
+        console2.log("approved delegation ?", success);
+        //console2.log("approved delegation ?", returndata);
         
         console2.log("beforeInitialize");
         return IHooks.beforeInitialize.selector;
@@ -84,8 +99,7 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager, StdCheats 
         override
         returns (bytes4)
     {
-        //Aave Mainnet pool address
-        IPool AavePool = IPool(0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2); 
+        
         //replace with gho's variable debt token interface or stable debt ???
         ICreditDelegationToken(ghoVariableDebtToken).approveDelegation(
             address(this), 
@@ -110,8 +124,10 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager, StdCheats 
         console2.log("totalCollateralETH", totalCollateralETH);
         console2.log("totalCollateralPool", totalCollateralPool);
 
+        /*
         AavePool.borrow(gho, 10e6, 2, 0, address(this));
         console2.log("Borrowed %e gho", ERC20(gho).balanceOf(address(this)));
+        */
         
         console2.log("afterInitialize");
         return IHooks.afterInitialize.selector;
@@ -140,10 +156,13 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager, StdCheats 
         BalanceDelta // delta
     )
         external
-        pure
         override
         returns (bytes4)
     {
+        //Borrow in name of PoolManager
+        AavePool.borrow(gho, 10e6, 2, 0, address(poolManager));
+        console2.log("Borrowed %e gho", ERC20(gho).balanceOf(address(this)));
+
         console2.log("afterModifyPosition");
         return IHooks.afterModifyPosition.selector;
     }
@@ -251,5 +270,28 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager, StdCheats 
         ERC20(Aeth).transfer(address(poolManager), ERC20(Aeth).balanceOf(address(this))/2);
         ERC20(Ausdc).transfer(address(poolManager), ERC20(Ausdc).balanceOf(address(this))/2);
     
+    }
+
+    function lockAcquired(uint256, /* id */ bytes calldata data)
+        external
+        virtual
+        override
+        poolManagerOnly
+        returns (bytes memory)
+    {
+        (bool success, bytes memory returnData) = address(this).call(data);
+        address DaiVariableDebt = 0xcF8d0c70c850859266f5C338b38F9D663181C314;
+        ICreditDelegationToken(DaiVariableDebt).approveDelegation(
+            address(this), 
+            type(uint256).max
+            );
+        console2.log("call address vs poolManager address", address(this), address(poolManager));
+        if (success) return returnData;
+        if (returnData.length == 0) revert LockFailure();
+        // if the call failed, bubble up the reason
+        /// @solidity memory-safe-assembly
+        assembly {
+            revert(add(returnData, 32), mload(returnData))
+        }
     }
 }
