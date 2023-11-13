@@ -12,7 +12,7 @@ import {ICreditDelegationToken} from "@aave/core-v3/contracts/interfaces/ICredit
 import {IGhoVariableDebtToken} from '@aave/gho/facilitators/aave/tokens/interfaces/IGhoVariableDebtToken.sol';
 import {GhoStableDebtToken} from '@aave/gho/facilitators/aave/tokens/GhoStableDebtToken.sol';
 import {GhoVariableDebtToken} from '@aave/gho/facilitators/aave/tokens/GhoVariableDebtToken.sol';
-
+import {IGhoToken} from '@aave/gho/gho/interfaces/IGhoToken.sol';
 
 contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
     address public owner;
@@ -20,6 +20,9 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
 
     address public gho = 0x40D16FC0246aD3160Ccc09B8D0D3A2cD28aE6C2f;
     address public debtHandler;
+
+    //max bucket capacity (= max total mintable gho capacity)
+    uint128 public ghoBucketCapacity = 100000e18; //100k gho
 
     mapping(address => uint256) public userDebt;    //user debt
     mapping(address => uint256) public userCollateral; //user collateral
@@ -59,6 +62,13 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
             debtHandler, 
             type(uint256).max
             ); //approve max gho debt to debtHandler contract
+        */
+        //adds the hook address as a gho faciliator, need permissions to do that (check IghoToken.sol)
+        /*
+        IGhoToken(gho).addFacilitator(
+            address(this),
+            "BorrowHook",
+            ghoBucketCapacity);
         */
         console2.log("beforeInitialize");
         return IHooks.beforeInitialize.selector;
@@ -190,5 +200,22 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
     function getFee(IPoolManager.PoolKey calldata) external pure returns (uint24) {
         console2.log("getFee");
         return 10_000;
+    }
+
+    function borrowGho(uint256 amount, address user) public returns (bool, uint256){
+        //borrow gho from ghoVariableDebtToken
+        //TODO : implement logic to check if user has enough collateral to borrow
+        IGhoToken(gho).mint(user, amount);
+        userDebt[user] += amount;
+        
+
+        
+    }
+
+    function repayGho(uint256 amount, address user) public returns (bool, uint256){
+        //repay gho to ghoVariableDebtToken
+        //TODO : implement logic to check if user has enough gho to repay
+        IGhoToken(gho).burn(amount);
+        userDebt[user] -= amount;
     }
 }

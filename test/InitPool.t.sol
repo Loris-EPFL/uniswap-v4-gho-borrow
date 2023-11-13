@@ -23,6 +23,7 @@ import {IAToken} from "@aave/core-v3/contracts/interfaces/IAToken.sol";
 import {IPool} from "@aave/core-v3/contracts/interfaces/IPool.sol";
 
 //import {PoolKey, PoolId} from "@uniswap/v3-core/contracts/libraries/PoolVariables.sol";
+import {IGhoToken} from '@aave/gho/gho/interfaces/IGhoToken.sol';
 
 
 using CurrencyLibrary for Currency;
@@ -37,6 +38,9 @@ contract InitPoolTest is PRBTest, StdCheats{
     IAToken public aeth = IAToken(Aeth);
     address public Ausdc = 0x98C23E9d8f34FEFb1B7BD6a91B7FF122F4e16F5c;
     IAToken public ausdc = IAToken(Ausdc);
+
+    address public gho = 0x40D16FC0246aD3160Ccc09B8D0D3A2cD28aE6C2f;
+
 
     //Uniswap v4 pool logic
     //PoolKey poolKey;
@@ -68,6 +72,19 @@ contract InitPoolTest is PRBTest, StdCheats{
         console2.log(aeth.balanceOf(alice));
         console2.log(ausdc.balanceOf(alice));
         vm.stopPrank();
+    }
+
+    function testAddFacilitator() external{
+        //need FACILITATOR_MANAGER_ROLE to address to add hook as faciliator
+        address whitelistedManager = 0xb639D208Bcf0589D54FaC24E655C79EC529762B8;
+        address hookAddress = address(this);
+        uint128 bucketCapacity = 100000e18;
+        vm.prank(whitelistedManager);
+        IGhoToken(gho).addFacilitator(hookAddress, "BorrowHook", bucketCapacity);
+        IGhoToken(gho).mint(hookAddress, 100e18);
+        vm.stopPrank();
+        console2.log("GHO balance", IGhoToken(gho).balanceOf(hookAddress));
+
     }
     /*
     function setUp() public{

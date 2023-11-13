@@ -101,8 +101,8 @@ contract UniswapHooksTest is PRBTest, StdCheats {
         // opposite action: poolManager.swap(key, IPoolManager.SwapParams(true, 100, TickMath.MIN_SQRT_RATIO * 1000));
         poolManager.swap(key, IPoolManager.SwapParams(false, 100, TickMath.MAX_SQRT_RATIO / 1000));
 
-        _settleTokenBalance(Currency.wrap(address(Aeth)));
-        _settleTokenBalance(Currency.wrap(address(Ausdc)));
+        _settleTokenBalance(Currency.wrap(address(WETH)));
+        _settleTokenBalance(Currency.wrap(address(USDC)));
 
         return new bytes(0);
     }
@@ -125,8 +125,8 @@ contract UniswapHooksTest is PRBTest, StdCheats {
 
     function _getPoolKey() private view returns (IPoolManager.PoolKey memory) {
         return IPoolManager.PoolKey({
-            currency0: Currency.wrap(address(Aeth)),
-            currency1: Currency.wrap(address(Ausdc)),
+            currency0: Currency.wrap(address(WETH)),
+            currency1: Currency.wrap(address(USDC)),
             fee: Fees.DYNAMIC_FEE_FLAG + Fees.HOOK_SWAP_FEE_FLAG + Fees.HOOK_WITHDRAW_FEE_FLAG, // 0xE00000 = 111
             tickSpacing: 1,
             hooks: IHooks(deployedHooks)
