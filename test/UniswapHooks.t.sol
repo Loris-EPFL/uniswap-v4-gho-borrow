@@ -107,8 +107,8 @@ contract UniswapHooksTest is PRBTest, StdCheats {
         // opposite action: poolManager.swap(key, IPoolManager.SwapParams(true, 100, TickMath.MIN_SQRT_RATIO * 1000));
         poolManager.swap(key, IPoolManager.SwapParams(false, 100, TickMath.MAX_SQRT_RATIO / 1000));
         console2.log("swap done");
-        _settleTokenBalance(Currency.wrap(address(Ausdc)));
         _settleTokenBalance(Currency.wrap(address(Aeth)));
+        _settleTokenBalance(Currency.wrap(address(Ausdc)));
 
         return new bytes(0);
     }
@@ -165,14 +165,5 @@ contract UniswapHooksTest is PRBTest, StdCheats {
     
     }
 
-/*
-    function addLiquidity(int24 tickLower, int24 tickUpper, int256 amount) internal {
-        _mintTokens();
-        IERC20Minimal(Aeth).approve(address(modifyPositionRouter), 10 ** 18);
-        IERC20Minimal(Ausdc).approve(address(modifyPositionRouter), 10 ** 18);
-        modifyPositionRouter.modifyPosition(
-            key, IPoolManager.ModifyPositionParams(tickLower, tickUpper, amount), ZERO_BYTES
-        );
-    }
-*/
+
 }

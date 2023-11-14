@@ -105,7 +105,7 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager, StdCheats 
         override
         returns (bytes4)
     {
-        
+        /*
         //replace with gho's variable debt token interface or stable debt ???
         ICreditDelegationToken(ghoVariableDebtToken).approveDelegation(
             address(this), 
@@ -283,28 +283,5 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager, StdCheats 
             hookAdress, 
             type(uint256).max
             );
-    }
-
-    function lockAcquired(uint256, /* id */ bytes calldata data)
-        external
-        virtual
-        override
-        poolManagerOnly
-        returns (bytes memory)
-    {
-        (bool success, bytes memory returnData) = address(this).call(data);
-        address DaiVariableDebt = 0xcF8d0c70c850859266f5C338b38F9D663181C314;
-        ICreditDelegationToken(DaiVariableDebt).approveDelegation(
-            address(this), 
-            type(uint256).max
-            );
-        console2.log("call address vs poolManager address", address(this), address(poolManager));
-        if (success) return returnData;
-        if (returnData.length == 0) revert LockFailure();
-        // if the call failed, bubble up the reason
-        /// @solidity memory-safe-assembly
-        assembly {
-            revert(add(returnData, 32), mload(returnData))
-        }
     }
 }
