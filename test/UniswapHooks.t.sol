@@ -30,13 +30,11 @@ contract UniswapHooksTest is PRBTest, StdCheats {
     IHooks internal deployedHooks;
     IPoolManager internal poolManager;
 
-    address  Aeth = 0x4d5F47FA6A74757f35C14fD3a6Ef8E3C9BC514E8;
-    address  Ausdc = 0x98C23E9d8f34FEFb1B7BD6a91B7FF122F4e16F5c;
+    
     address WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
     address USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
 
-    IAToken public aeth = IAToken(Aeth);
-    IAToken public ausdc = IAToken(Ausdc);
+   
 
 
     function setUp() public virtual {
@@ -141,7 +139,6 @@ contract UniswapHooksTest is PRBTest, StdCheats {
     function _mintTokens() internal{
         address WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
         address USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
-        IPool AavePool = IPool(0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2); //Aave Mainnet pool address
         address owner = 0x388C818CA8B9251b393131C08a736A67ccB19297;
  
         //mint Aeth and Ausdc by depositing into pool
@@ -149,13 +146,7 @@ contract UniswapHooksTest is PRBTest, StdCheats {
         deal(USDC, address(this), 10000e6);
 
         console2.log("hook's WETH balance", ERC20(WETH).balanceOf(address(this)));
-        ERC20(WETH).approve(address(AavePool), type(uint256).max);
-        ERC20(USDC).approve(address(AavePool), type(uint256).max);
-
-        AavePool.supply(WETH, 1e18, address(this),0);
-        AavePool.supply(USDC, 1000e6, address(this),0);
-        console2.log(aeth.balanceOf(address(this)));
-        console2.log(ausdc.balanceOf(address(this)));
+        console2.log("hook's USDC balance", ERC20(USDC).balanceOf(address(this)));
     
     }
 }

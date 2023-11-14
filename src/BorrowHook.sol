@@ -13,13 +13,21 @@ import {IGhoVariableDebtToken} from '@aave/gho/facilitators/aave/tokens/interfac
 import {GhoStableDebtToken} from '@aave/gho/facilitators/aave/tokens/GhoStableDebtToken.sol';
 import {GhoVariableDebtToken} from '@aave/gho/facilitators/aave/tokens/GhoVariableDebtToken.sol';
 import {IGhoToken} from '@aave/gho/gho/interfaces/IGhoToken.sol';
+import {PoolKey} from "@uniswap/core-v4/contracts/types/PoolKey.sol";
+import { PoolManager, Currency } from "@uniswap/v4-core/contracts/PoolManager.sol";
+import { TickMath } from "@uniswap/v4-core/contracts/libraries/TickMath.sol";
+import { Fees } from "@uniswap/v4-core/contracts/libraries/Fees.sol";
+import {PoolIdLibrary} from "@uniswap/v4-core/contracts/libraries/PoolId.sol";
 
 contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
+    using PoolIdLibrary for IPoolManager.PoolKey;
     address public owner;
     address public ghoVariableDebtToken = 0x3FEaB6F8510C73E05b8C0Fdf96Df012E3A144319;
 
     address public gho = 0x40D16FC0246aD3160Ccc09B8D0D3A2cD28aE6C2f;
-    address public debtHandler;
+    address WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+    address USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
+
 
     //max bucket capacity (= max total mintable gho capacity)
     uint128 public ghoBucketCapacity = 100000e18; //100k gho
@@ -205,6 +213,7 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
     function borrowGho(uint256 amount, address user) public returns (bool, uint256){
         //borrow gho from ghoVariableDebtToken
         //TODO : implement logic to check if user has enough collateral to borrow
+        
         IGhoToken(gho).mint(user, amount);
         userDebt[user] += amount;
         
@@ -217,5 +226,27 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
         //TODO : implement logic to check if user has enough gho to repay
         IGhoToken(gho).burn(amount);
         userDebt[user] -= amount;
+    }
+
+    function _getUserLiquidityPriceUSD(address user) internal returns (uint128){
+        //get user liquidity
+        IPoolManager.PoolKey memory key = _getPoolKey();
+        int24 tickLower = TickMath.MIN_TICK;
+        int24 tickUpper = TickMath.MAX_TICK;
+        uint128 userLiquidity = poolManager.getLiquidity(key.toId(),user,  tickLower, tickUpper);
+        console2.log("user liquidity", userLiquidity);
+        return userLiquidity;
+    }   
+
+
+    //Helper function to return PoolKey
+    function _getPoolKey() private view returns (IPoolManager.PoolKey memory) {
+        return IPoolManager.PoolKey({
+            currency0: Currency.wrap(address(WETH)),
+            currency1: Currency.wrap(address(USDC)),
+            fee: Fees.DYNAMIC_FEE_FLAG + Fees.HOOK_SWAP_FEE_FLAG + Fees.HOOK_WITHDRAW_FEE_FLAG, // 0xE00000 = 111
+            tickSpacing: 1,
+            hooks: IHooks(address(this))
+        });
     }
 }
