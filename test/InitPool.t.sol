@@ -4,7 +4,6 @@ pragma solidity >=0.8.19;
 import { PRBTest } from "@prb/test/PRBTest.sol";
 import { console2 } from "forge-std/console2.sol";
 import { StdCheats } from "forge-std/StdCheats.sol";
-
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 
@@ -80,7 +79,10 @@ contract InitPoolTest is PRBTest, StdCheats, AccessControl{
         address whitelistedManager = 0x2401ae9bBeF67458362710f90302Eb52b5Ce835a;
 
         address alice = makeAddr("alice");
-        bytes32 FacilitatorRole = 0x5e20732f79076148980e17b6ce9f22756f85058fe2765420ed48a504bef5a8bc;
+        //bytes32 FacilitatorRole = 0x5e20732f79076148980e17b6ce9f22756f85058fe2765420ed48a504bef5a8bc;
+        bytes32 FacilitatorRole = (IGhoToken(gho).FACILITATOR_MANAGER_ROLE());
+        console2.logBytes32(FacilitatorRole);   
+
         _grantRole(FacilitatorRole, alice);
         address hookAddress = address(this);
         uint128 bucketCapacity = 100000e18;
