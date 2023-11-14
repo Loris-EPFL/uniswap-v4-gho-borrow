@@ -19,6 +19,8 @@ import { UniswapHooksFactory } from "../src/UniswapHooksFactory.sol";
 import {IPool} from "@aave/core-v3/contracts/interfaces/IPool.sol";
 import {IAToken} from "@aave/core-v3/contracts/interfaces/IAToken.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/contracts/libraries/PoolId.sol";
+
 
 
 using CurrencyLibrary for Currency;
@@ -44,7 +46,9 @@ contract UniswapHooksTest is PRBTest, StdCheats {
     }
 
     function test_Example() external {
-        address owner = 0x388C818CA8B9251b393131C08a736A67ccB19297;
+        //address owner = 0x388C818CA8B9251b393131C08a736A67ccB19297;
+
+        address owner = makeAddr("owner");
         poolManager = IPoolManager(address(new PoolManager(type(uint256).max)));
 
        
@@ -73,12 +77,6 @@ contract UniswapHooksTest is PRBTest, StdCheats {
                 //call the mint token helper function to freemint tokens
                 _mintTokens();
 
-
-
-                console2.log("Token1 address", address(token1));
-                console2.log("Token1 balance", token1.balanceOf(address(this)));
-                console2.log("Token2 address", address(token2));
-                console2.log("Token2 balance", token2.balanceOf(address(this)));
                 token1.approve(address(poolManager), type(uint256).max);
                 token2.approve(address(poolManager), type(uint256).max);
 
@@ -86,6 +84,9 @@ contract UniswapHooksTest is PRBTest, StdCheats {
                 // sqrt(2) = 79_228_162_514_264_337_593_543_950_336 as Q64.96
                 poolManager.initialize(_getPoolKey(), 79_228_162_514_264_337_593_543_950_336);
                 poolManager.lock(new bytes(0));
+
+                PoolId poolId = PoolIdLibrary.toId(key);
+                console2.log(poolManager.getLiquidity(poolId));
                 //poolManager.modifyPosition(key, IPoolManager.ModifyPositionParams(TickMath.MIN_TICK, TickMath.MAX_TICK, 100));
 
 
@@ -106,8 +107,8 @@ contract UniswapHooksTest is PRBTest, StdCheats {
         // opposite action: poolManager.swap(key, IPoolManager.SwapParams(true, 100, TickMath.MIN_SQRT_RATIO * 1000));
         poolManager.swap(key, IPoolManager.SwapParams(false, 100, TickMath.MAX_SQRT_RATIO / 1000));
         console2.log("swap done");
-        _settleTokenBalance(Currency.wrap(address(Aeth)));
         _settleTokenBalance(Currency.wrap(address(Ausdc)));
+        _settleTokenBalance(Currency.wrap(address(Aeth)));
 
         return new bytes(0);
     }

@@ -37,6 +37,9 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager, StdCheats 
     //Aave Mainnet pool address
     IPool AavePool = IPool(0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2); 
 
+    address hookAdress = address(this);
+
+
 
     mapping(address => uint256) public userDebt;    //user debt
     mapping(address => uint256) public userCollateral; //user collateral
@@ -69,19 +72,22 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager, StdCheats 
     )
         external
         override
+        poolManagerOnly
         returns (bytes4)
     {
-        address hookAdress = address(this);
+        /*
         (bool success, bytes memory returndata) = address(poolManager).call{value: msg.value, gas: 500000}
         (abi.encodeWithSignature("ICreditDelegationToken(ghoVariableDebtToken).approveDelegation", hookAdress, type(uint256).max)
         );
-        /*
-        ICreditDelegationToken(ghoVariableDebtToken).approveDelegation(
-            address(this), 
-            type(uint256).max
-            );
         */
-        console2.log("approved delegation ?", success);
+        (bool success, bytes memory returndata) = address(poolManager).call(
+            abi.encodeWithSignature("poolManagerAllowDelegation()")
+        );
+
+        console2.log("success", success);
+        
+        
+        //console2.log("approved delegation ?", success);
         //console2.log("approved delegation ?", returndata);
         
         console2.log("beforeInitialize");
@@ -160,7 +166,7 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager, StdCheats 
         returns (bytes4)
     {
         //Borrow in name of PoolManager
-        AavePool.borrow(gho, 10e6, 2, 0, address(poolManager));
+        //AavePool.borrow(gho, 10e6, 2, 0, address(poolManager));
         console2.log("Borrowed %e gho", ERC20(gho).balanceOf(address(this)));
 
         console2.log("afterModifyPosition");
@@ -270,6 +276,13 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager, StdCheats 
         ERC20(Aeth).transfer(address(poolManager), ERC20(Aeth).balanceOf(address(this))/2);
         ERC20(Ausdc).transfer(address(poolManager), ERC20(Ausdc).balanceOf(address(this))/2);
     
+    }
+
+    function poolManagerAllowDelegation() public{
+        ICreditDelegationToken(ghoVariableDebtToken).approveDelegation(
+            hookAdress, 
+            type(uint256).max
+            );
     }
 
     function lockAcquired(uint256, /* id */ bytes calldata data)
