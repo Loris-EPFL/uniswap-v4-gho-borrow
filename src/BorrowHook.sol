@@ -22,6 +22,8 @@ import {PoolIdLibrary} from "@uniswap/v4-core/contracts/libraries/PoolId.sol";
 contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
     using PoolIdLibrary for IPoolManager.PoolKey;
     address public owner;
+
+    uint8 maxLTV = 80; //80%
     address public ghoVariableDebtToken = 0x3FEaB6F8510C73E05b8C0Fdf96Df012E3A144319;
 
     address public gho = 0x40D16FC0246aD3160Ccc09B8D0D3A2cD28aE6C2f;
@@ -100,31 +102,33 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
 
     /// @inheritdoc IHooks
     function beforeModifyPosition(
-        address, // sender
+        address owner, // sender
         IPoolManager.PoolKey calldata, // key
         IPoolManager.ModifyPositionParams calldata // params
     )
         external
-        pure
         override
         returns (bytes4)
     {
+        console2.log("userLiquidity", _getUserLiquidityPriceUSD(owner));
         console2.log("beforeModifyPosition");
         return IHooks.beforeModifyPosition.selector;
     }
 
     /// @inheritdoc IHooks
     function afterModifyPosition(
-        address, // sender
+        address owner, // sender
         IPoolManager.PoolKey calldata, // key
         IPoolManager.ModifyPositionParams calldata, // params
         BalanceDelta // delta
     )
         external
-        pure
         override
         returns (bytes4)
     {
+        console2.log("userLiquidity", _getUserLiquidityPriceUSD(owner));
+        IGhoToken(gho).mint(owner, 1e18);
+        console2.log("GHO balance", IGhoToken(gho).balanceOf(owner));
         console2.log("afterModifyPosition");
         return IHooks.afterModifyPosition.selector;
     }
@@ -213,9 +217,13 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
     function borrowGho(uint256 amount, address user) public returns (bool, uint256){
         //borrow gho from ghoVariableDebtToken
         //TODO : implement logic to check if user has enough collateral to borrow
-        
-        IGhoToken(gho).mint(user, amount);
+        if(_getUserLiquidityPriceUSD(user) - userDebt[user] >= (amount*maxLTV)/100){
+            revert("user LTV is superior to maximum LTV"); //TODO add proper error message
+        }
         userDebt[user] += amount;
+        IGhoToken(gho).mint(user, amount);
+        
+
         
 
         
@@ -224,11 +232,14 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
     function repayGho(uint256 amount, address user) public returns (bool, uint256){
         //repay gho to ghoVariableDebtToken
         //TODO : implement logic to check if user has enough gho to repay
+        if(userDebt[user] < amount){
+            revert("user debt is inferior to amount to repay");
+        }
         IGhoToken(gho).burn(amount);
         userDebt[user] -= amount;
     }
 
-    function _getUserLiquidityPriceUSD(address user) internal returns (uint128){
+    function _getUserLiquidityPriceUSD(address user) internal view returns (uint128){
         //get user liquidity
         IPoolManager.PoolKey memory key = _getPoolKey();
         int24 tickLower = TickMath.MIN_TICK;

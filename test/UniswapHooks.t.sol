@@ -19,6 +19,9 @@ import { UniswapHooksFactory } from "../src/UniswapHooksFactory.sol";
 import {IPool} from "@aave/core-v3/contracts/interfaces/IPool.sol";
 import {IAToken} from "@aave/core-v3/contracts/interfaces/IAToken.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {InitPoolTest} from "./InitPool.t.sol";
+import {IGhoToken} from '@aave/gho/gho/interfaces/IGhoToken.sol';
+
 
 
 using CurrencyLibrary for Currency;
@@ -33,6 +36,7 @@ contract UniswapHooksTest is PRBTest, StdCheats {
     
     address WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
     address USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
+    address gho = 0x40D16FC0246aD3160Ccc09B8D0D3A2cD28aE6C2f;
 
    
 
@@ -64,12 +68,21 @@ contract UniswapHooksTest is PRBTest, StdCheats {
 
                 IPoolManager.PoolKey memory key = _getPoolKey();
 
+
+
                 // First we need two tokens
                 token1 = MockERC20(Currency.unwrap(key.currency0));
                 token2 = MockERC20(Currency.unwrap(key.currency1));
                 
                 //call the mint token helper function to freemint tokens
                 _mintTokens();
+
+                //add hook as faciliator
+               AddFacilitator(address(deployedHooks));
+
+               (uint256 bukcet, ) = IGhoToken(gho).getFacilitatorBucket(address(deployedHooks));
+
+               console2.log("bucket capacity", bukcet);
 
                 console2.log("Token1 address", address(token1));
                 console2.log("Token1 balance", token1.balanceOf(address(this)));
@@ -93,7 +106,7 @@ contract UniswapHooksTest is PRBTest, StdCheats {
         IPoolManager.PoolKey memory key = _getPoolKey();
 
         // lets execute all remaining hooks
-        poolManager.modifyPosition(key, IPoolManager.ModifyPositionParams(TickMath.MIN_TICK, TickMath.MAX_TICK, 1000));
+        poolManager.modifyPosition(key, IPoolManager.ModifyPositionParams(TickMath.MIN_TICK, TickMath.MAX_TICK, 10e6));
         poolManager.donate(key, 100, 100);
 
         // opposite action: poolManager.swap(key, IPoolManager.SwapParams(true, 100, TickMath.MIN_SQRT_RATIO * 1000));
@@ -148,5 +161,24 @@ contract UniswapHooksTest is PRBTest, StdCheats {
         console2.log("hook's WETH balance", ERC20(WETH).balanceOf(address(this)));
         console2.log("hook's USDC balance", ERC20(USDC).balanceOf(address(this)));
     
+    }
+
+    //Helper function to add hook as faciliator
+    function AddFacilitator(address faciliator) public{
+        //need FACILITATOR_MANAGER_ROLE to address to add hook as faciliator
+        address whitelistedManager = 0x5300A1a15135EA4dc7aD5a167152C01EFc9b192A; //whitelisted address of aave dao
+
+        bytes32 FacilitatorRole = (IGhoToken(gho).FACILITATOR_MANAGER_ROLE());
+
+        
+        address hookAddress = address(this);
+        uint128 bucketCapacity = 100000e18;
+        vm.startPrank(whitelistedManager);
+        IGhoToken(gho).addFacilitator(faciliator, "BorrowHook", bucketCapacity);
+       
+        vm.stopPrank();
+
+        console2.log("GHO balance", IGhoToken(gho).balanceOf(hookAddress));
+
     }
 }
