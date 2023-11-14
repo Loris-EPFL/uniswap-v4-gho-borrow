@@ -85,10 +85,12 @@ contract UniswapHooksTest is PRBTest, StdCheats {
                 poolManager.initialize(_getPoolKey(), 79_228_162_514_264_337_593_543_950_336);
                 poolManager.lock(new bytes(0));
 
+                
                 PoolId poolId = PoolIdLibrary.toId(key);
-                console2.log(poolManager.getLiquidity(poolId));
+                //console2.logBytes32(bytes32(poolId));
+                console2.log("liquidity" ,poolManager.getLiquidity(poolId));
                 //poolManager.modifyPosition(key, IPoolManager.ModifyPositionParams(TickMath.MIN_TICK, TickMath.MAX_TICK, 100));
-
+                
 
                 return;
             }
@@ -102,7 +104,7 @@ contract UniswapHooksTest is PRBTest, StdCheats {
 
         // lets execute all remaining hooks
         poolManager.modifyPosition(key, IPoolManager.ModifyPositionParams(TickMath.MIN_TICK, TickMath.MAX_TICK, 10000));
-        poolManager.donate(key, 1000, 1000);
+        poolManager.donate(key, 10e18, 10000e6);
 
         // opposite action: poolManager.swap(key, IPoolManager.SwapParams(true, 100, TickMath.MIN_SQRT_RATIO * 1000));
         poolManager.swap(key, IPoolManager.SwapParams(false, 100, TickMath.MAX_SQRT_RATIO / 1000));
@@ -152,14 +154,14 @@ contract UniswapHooksTest is PRBTest, StdCheats {
  
         //mint Aeth and Ausdc by depositing into pool
         deal(WETH, address(this), 100e18);
-        deal(USDC, address(this), 10000e6);
+        deal(USDC, address(this), 1000000e6);
 
         console2.log("hook's WETH balance", ERC20(WETH).balanceOf(address(this)));
         ERC20(WETH).approve(address(AavePool), type(uint256).max);
         ERC20(USDC).approve(address(AavePool), type(uint256).max);
 
-        AavePool.supply(WETH, 1e18, address(this),0);
-        AavePool.supply(USDC, 1000e6, address(this),0);
+        AavePool.supply(WETH, 100e18, address(this),0);
+        AavePool.supply(USDC, 100000e6, address(this),0);
         console2.log(aeth.balanceOf(address(this)));
         console2.log(ausdc.balanceOf(address(this)));
     
