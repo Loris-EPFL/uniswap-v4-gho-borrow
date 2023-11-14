@@ -83,11 +83,13 @@ contract InitPoolTest is PRBTest, StdCheats, AccessControl{
         
         address hookAddress = address(this);
         uint128 bucketCapacity = 100000e18;
-        vm.prank(whitelistedManager);
+        vm.startPrank(whitelistedManager);
         IGhoToken(gho).addFacilitator(hookAddress, "BorrowHook", bucketCapacity);
+       
+        vm.stopPrank();
+
         IGhoToken(gho).mint(hookAddress, 100e18);
         console2.log("GHO balance", IGhoToken(gho).balanceOf(hookAddress));
-        //vm.stopPrank();
 
     }
     /*
