@@ -30,6 +30,12 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
     address WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
     address USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
 
+    struct userLiquidity{
+        uint256 liquidity;
+        uint256 tickLower;
+        uint256 tickUpper;
+    }
+
 
     //max bucket capacity (= max total mintable gho capacity)
     uint128 public ghoBucketCapacity = 100000e18; //100k gho
@@ -217,7 +223,7 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
     function borrowGho(uint256 amount, address user) public returns (bool, uint256){
         //borrow gho from ghoVariableDebtToken
         //TODO : implement logic to check if user has enough collateral to borrow
-        if(_getUserLiquidityPriceUSD(user) - userDebt[user] >= (amount*maxLTV)/100){
+        if(_getUserLiquidityPriceUSD(user) >= ((amount+ userDebt[user])*maxLTV)/100){
             revert("user LTV is superior to maximum LTV"); //TODO add proper error message
         }
         userDebt[user] += amount;
