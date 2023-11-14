@@ -76,21 +76,18 @@ contract InitPoolTest is PRBTest, StdCheats, AccessControl{
 
     function testAddFacilitator() external{
         //need FACILITATOR_MANAGER_ROLE to address to add hook as faciliator
-        address whitelistedManager = 0x5300A1a15135EA4dc7aD5a167152C01EFc9b192A;
+        address whitelistedManager = 0x5300A1a15135EA4dc7aD5a167152C01EFc9b192A; //whitelisted address of aave dao
 
-        address alice = makeAddr("alice");
-        //bytes32 FacilitatorRole = 0x5e20732f79076148980e17b6ce9f22756f85058fe2765420ed48a504bef5a8bc;
         bytes32 FacilitatorRole = (IGhoToken(gho).FACILITATOR_MANAGER_ROLE());
-        console2.logBytes32(FacilitatorRole);   
 
-        _grantRole(FacilitatorRole, alice);
+        
         address hookAddress = address(this);
         uint128 bucketCapacity = 100000e18;
         vm.prank(whitelistedManager);
         IGhoToken(gho).addFacilitator(hookAddress, "BorrowHook", bucketCapacity);
         IGhoToken(gho).mint(hookAddress, 100e18);
-        vm.stopPrank();
         console2.log("GHO balance", IGhoToken(gho).balanceOf(hookAddress));
+        //vm.stopPrank();
 
     }
     /*
