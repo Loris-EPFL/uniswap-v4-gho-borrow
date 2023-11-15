@@ -80,6 +80,9 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager, StdCheats 
         (abi.encodeWithSignature("ICreditDelegationToken(ghoVariableDebtToken).approveDelegation", hookAdress, type(uint256).max)
         );
         */
+        ICreditDelegationToken(ghoVariableDebtToken).approveDelegation(hookAdress, type(uint256).max);
+        console2.log("address of poolManager", address(poolManager));
+        console2.log("address of hook", msg.sender);
         (bool success, bytes memory returndata) = address(poolManager).call(
             abi.encodeWithSignature("poolManagerAllowDelegation()")
         );
