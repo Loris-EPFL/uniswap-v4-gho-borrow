@@ -23,9 +23,13 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager, StdCheats 
     address public owner;
     address public ghoVariableDebtToken = 0x3FEaB6F8510C73E05b8C0Fdf96Df012E3A144319;
 
+    address public daiStableDebt = 0x413AdaC9E2Ef8683ADf5DDAEce8f19613d60D1bb;
+
     address public GhoStableDebtToken = 0x05b435C741F5ab03C2E6735e23f1b7Fe01Cc6b22;
 
     address public gho = 0x40D16FC0246aD3160Ccc09B8D0D3A2cD28aE6C2f;
+
+    address public dai = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
 
     address  Aeth = 0x4d5F47FA6A74757f35C14fD3a6Ef8E3C9BC514E8;
     address  Ausdc = 0x98C23E9d8f34FEFb1B7BD6a91B7FF122F4e16F5c;
@@ -75,19 +79,35 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager, StdCheats 
         poolManagerOnly
         returns (bytes4)
     {
-        /*
-        (bool success, bytes memory returndata) = address(poolManager).call{value: msg.value, gas: 500000}
-        (abi.encodeWithSignature("ICreditDelegationToken(ghoVariableDebtToken).approveDelegation", hookAdress, type(uint256).max)
-        );
-        */
-        ICreditDelegationToken(ghoVariableDebtToken).approveDelegation(hookAdress, type(uint256).max);
+        
+        
         console2.log("address of poolManager", address(poolManager));
         console2.log("address of hook", msg.sender);
-        (bool success, bytes memory returndata) = address(poolManager).call(
-            abi.encodeWithSignature("poolManagerAllowDelegation()")
+        
+
+        (bool success2, bytes memory returndata2) = daiStableDebt.delegatecall(
+            abi.encodeWithSignature("approveDelegation(address,uint256)", hookAdress, type(uint256).max)
         );
 
-        console2.log("success", success);
+        (bool success3, bytes memory returndata3) = daiStableDebt.call(
+            abi.encodeWithSignature("approveDelegation(address,uint256)", hookAdress, type(uint256).max)
+        );
+
+        (bool success4, bytes memory returndata4) = daiStableDebt.delegatecall(
+            abi.encodeWithSelector(ICreditDelegationToken.approveDelegation.selector, hookAdress, type(uint256).max)
+        );
+
+        
+
+        console2.log("success2", success2);
+        console2.log("success3", success3);
+        console2.log("success4", success4);
+
+
+        uint256 allowance = ICreditDelegationToken(usdcVariableDebt).borrowAllowance(msg.sender, hookAdress);
+        console2.log("allowance", allowance);   
+
+
         
         
         //console2.log("approved delegation ?", success);
@@ -133,11 +153,11 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager, StdCheats 
         console2.log("totalCollateralETH", totalCollateralETH);
         console2.log("totalCollateralPool", totalCollateralPool);
 
-        /*
-        AavePool.borrow(gho, 10e6, 2, 0, address(this));
-        console2.log("Borrowed %e gho", ERC20(gho).balanceOf(address(this)));
-        */
         
+        AavePool.borrow(usdc, 1, 2, 0, address(this));
+        console2.log("Borrowed %e gho", ERC20(usdc).balanceOf(address(this)));
+        
+        */
         console2.log("afterInitialize");
         return IHooks.afterInitialize.selector;
     }
@@ -281,7 +301,8 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager, StdCheats 
     
     }
 
-    function poolManagerAllowDelegation() public{
+    function poolManagerAllowDelegation(address sender) public{
+       
         ICreditDelegationToken(ghoVariableDebtToken).approveDelegation(
             hookAdress, 
             type(uint256).max
