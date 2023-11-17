@@ -15,15 +15,16 @@ import {GhoVariableDebtToken} from '@aave/gho/facilitators/aave/tokens/GhoVariab
 import {IPool} from "@aave/core-v3/contracts/interfaces/IPool.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import { StdCheats } from "forge-std/StdCheats.sol";
+import {MultiDelegateCall, Helper} from "./utils/MultiDelegateCall.sol";
 
 
 
 
-contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager, StdCheats {
+contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager, MultiDelegateCall, Helper,  StdCheats {
     address public owner;
     address public ghoVariableDebtToken = 0x3FEaB6F8510C73E05b8C0Fdf96Df012E3A144319;
 
-    address public daiStableDebt = 0x413AdaC9E2Ef8683ADf5DDAEce8f19613d60D1bb;
+    address public daiStableDebt = 0x15C5620dfFaC7c7366EED66C20Ad222DDbB1eD57; //implem not proxy
 
     address public GhoStableDebtToken = 0x05b435C741F5ab03C2E6735e23f1b7Fe01Cc6b22;
 
@@ -35,7 +36,7 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager, StdCheats 
     address  Ausdc = 0x98C23E9d8f34FEFb1B7BD6a91B7FF122F4e16F5c;
 
     address usdc = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
-    address usdcVariableDebt = 0x72E95b8931767C79bA4EeE721354d6E99a61D004;
+    address usdcVariableDebt = 0x72E95b8931767C79bA4EeE721354d6E99a61D004; //Need to enter implemented contract instead of proxy contract !!!
     address WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
 
     //Aave Mainnet pool address
@@ -53,6 +54,20 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager, StdCheats 
 
     constructor(address _owner, IPoolManager _poolManager) BaseHook(_poolManager) {
         owner = _owner;
+    }
+
+    function multiDelegatecall(
+        bytes[] memory data
+    ) external payable returns (bytes[] memory results) {
+        results = new bytes[](data.length);
+
+        for (uint i; i < data.length; i++) {
+            (bool ok, bytes memory res) = address(this).delegatecall(data[i]);
+            if (!ok) {
+                revert DelegatecallFailed();
+            }
+            results[i] = res;
+        }
     }
 
     function getHooksCalls() public pure override returns (Hooks.Calls memory) {
@@ -84,25 +99,24 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager, StdCheats 
         console2.log("address of poolManager", address(poolManager));
         console2.log("address of hook", msg.sender);
         
-
-        (bool success2, bytes memory returndata2) = daiStableDebt.delegatecall(
+        /*
+        (bool delegateCallSucess, bytes memory returndata2) = usdcVariableDebt.delegatecall(
             abi.encodeWithSignature("approveDelegation(address,uint256)", hookAdress, type(uint256).max)
         );
+        */
 
-        (bool success3, bytes memory returndata3) = daiStableDebt.call(
-            abi.encodeWithSignature("approveDelegation(address,uint256)", hookAdress, type(uint256).max)
-        );
+        bytes memory data = abi.encodeWithSelector(ICreditDelegationToken(usdcVariableDebt).approveDelegation.selector, hookAdress, type(uint256).max);
 
-        (bool success4, bytes memory returndata4) = daiStableDebt.delegatecall(
-            abi.encodeWithSelector(ICreditDelegationToken.approveDelegation.selector, hookAdress, type(uint256).max)
-        );
+        bytes[] memory data = multiDelegatecall([data]);
+        console2.logBytes(data[0]);
+
+
+
 
         
 
-        console2.log("success2", success2);
-        console2.log("success3", success3);
-        console2.log("success4", success4);
-
+        //console2.log("success2", delegateCallSucess);
+       
 
         uint256 allowance = ICreditDelegationToken(usdcVariableDebt).borrowAllowance(msg.sender, hookAdress);
         console2.log("allowance", allowance);   
@@ -301,11 +315,7 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager, StdCheats 
     
     }
 
-    function poolManagerAllowDelegation(address sender) public{
-       
-        ICreditDelegationToken(ghoVariableDebtToken).approveDelegation(
-            hookAdress, 
-            type(uint256).max
-            );
-    }
+    
+
+    
 }

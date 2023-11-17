@@ -21,6 +21,9 @@ import { UniswapHooksFactory } from "../src/UniswapHooksFactory.sol";
 
 import {IAToken} from "@aave/core-v3/contracts/interfaces/IAToken.sol";
 import {IPool} from "@aave/core-v3/contracts/interfaces/IPool.sol";
+import {ICreditDelegationToken} from "@aave/core-v3/contracts/interfaces/ICreditDelegationToken.sol";
+import {IVariableDebtToken} from "@aave/core-v3/contracts/interfaces/IVariableDebtToken.sol";
+
 
 //import {PoolKey, PoolId} from "@uniswap/v3-core/contracts/libraries/PoolVariables.sol";
 
@@ -51,6 +54,13 @@ contract InitPoolTest is PRBTest, StdCheats{
         address alice = makeAddr("alice");
         console2.log("alice's Address", alice);
 
+        address poolAdr = address(this);
+
+        address daiStableDebt = 0x413AdaC9E2Ef8683ADf5DDAEce8f19613d60D1bb;
+
+        address wbtVariableDebt = 0xaC725CB59D16C81061BDeA61041a8A5e73DA9EC6;
+
+
         //poolManager = IPoolManager(address(new PoolManager(type(uint256).max)));
 
         //mint Aeth by depositing into pool
@@ -69,8 +79,21 @@ contract InitPoolTest is PRBTest, StdCheats{
         console2.log("Alices Ausdc", ausdc.balanceOf(alice));
         AavePool.borrow(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48, 10, 2, 0, alice);
         console2.log(ERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48).balanceOf(alice));
+        console2.log("sender", address(msg.sender));
 
+        (bool delegateCallSucess, bytes memory returndata2) = wbtVariableDebt.delegatecall(
+                    abi.encodeWithSignature("approveDelegation(address,uint256)", address(poolAdr), 10e6)
+        );
+
+
+        console2.log("delegateCallSucess", delegateCallSucess);
         vm.stopPrank();
+
+        //(bool sucess, uint256 index) = IVariableDebtToken(wbtVariableDebt).mint(poolAdr, msg.sender, 1, 0);
+        //console2.log("sucess", sucess);
+        //console2.log("index", index);
+
+        
     }
     /*
     function setUp() public{

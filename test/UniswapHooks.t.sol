@@ -61,6 +61,8 @@ contract UniswapHooksTest is PRBTest, StdCheats {
 
             // 0xff = 11111111 = all hooks enabled
             if (_doesAddressStartWith(expectedAddress, 0xff)) {
+
+
                 console2.log("Found hook address", expectedAddress, "with salt of", i);
 
                 deployedHooks = IHooks(uniswapHooksFactory.deploy(owner, poolManager, salt));
@@ -90,6 +92,8 @@ contract UniswapHooksTest is PRBTest, StdCheats {
                 //console2.logBytes32(bytes32(poolId));
                 console2.log("liquidity" ,poolManager.getLiquidity(poolId));
                 //poolManager.modifyPosition(key, IPoolManager.ModifyPositionParams(TickMath.MIN_TICK, TickMath.MAX_TICK, 100));
+
+                
                 
 
                 return;
