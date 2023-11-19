@@ -21,6 +21,7 @@ import {IAToken} from "@aave/core-v3/contracts/interfaces/IAToken.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {InitPoolTest} from "./InitPool.t.sol";
 import {IGhoToken} from '@aave/gho/gho/interfaces/IGhoToken.sol';
+import {PoolIdLibrary} from "@uniswap/v4-core/contracts/libraries/PoolId.sol";
 
 
 
@@ -106,15 +107,19 @@ contract UniswapHooksTest is PRBTest, StdCheats {
         token2 = MockERC20(Currency.unwrap(key.currency1));
 
         // lets execute all remaining hooks
-        poolManager.modifyPosition(key, IPoolManager.ModifyPositionParams(-60*10, 60*10, 10e10)); //manage ranges with ticks
+        poolManager.modifyPosition(key, IPoolManager.ModifyPositionParams(-60*6, 60*6, 10e10)); //manage ranges with ticks
         //poolManager.donate(key, 100, 100);
     
         //swap 1
         console2.log("Token1 balance before swap %e", token1.balanceOf(address(this)));
         console2.log("Token2 balance before swap %e", token2.balanceOf(address(this)));
 
+        (uint160 sqrtPriceX96Current, int24 currentTick, , , , ) = poolManager.getSlot0(PoolIdLibrary.toId(key));
+        uint160 maxSlippage = 2;
+
+
         // opposite action: poolManager.swap(key, IPoolManager.SwapParams(true, 100, TickMath.MIN_SQRT_RATIO * 1000));
-        poolManager.swap(key, IPoolManager.SwapParams(false, 1e17, TickMath.MAX_SQRT_RATIO / 1000)); //false = buy eth with usdc
+        poolManager.swap(key, IPoolManager.SwapParams(false, 1e17, sqrtPriceX96Current + sqrtPriceX96Current*maxSlippage/100)); //false = buy eth with usdc
 
 
         _settleTokenBalance(Currency.wrap(address(WETH)));
@@ -128,7 +133,7 @@ contract UniswapHooksTest is PRBTest, StdCheats {
         console2.log("Token1 balance before swap %e", token1.balanceOf(address(this)));
         console2.log("Token2 balance before swap %e", token2.balanceOf(address(this)));
 
-        poolManager.swap(key, IPoolManager.SwapParams(true, 1e8, TickMath.MIN_SQRT_RATIO * 1000)); //true = sell eth for usdc
+        poolManager.swap(key, IPoolManager.SwapParams(true, 1e18, sqrtPriceX96Current - sqrtPriceX96Current*maxSlippage/100)); //true = sell eth for usdc
 
         _settleTokenBalance(Currency.wrap(address(WETH)));
         _settleTokenBalance(Currency.wrap(address(USDC)));
