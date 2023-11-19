@@ -19,6 +19,7 @@ import { TickMath } from "@uniswap/v4-core/contracts/libraries/TickMath.sol";
 import { Fees } from "@uniswap/v4-core/contracts/libraries/Fees.sol";
 import {PoolIdLibrary} from "@uniswap/v4-core/contracts/libraries/PoolId.sol";
 import {SqrtPriceMath} from "@uniswap/v4-core/contracts/libraries/SqrtPriceMath.sol";
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
     using PoolIdLibrary for IPoolManager.PoolKey;
@@ -160,17 +161,17 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
 
     /// @inheritdoc IHooks
     function afterSwap(
-        address, // sender
+        address sender, // sender
         IPoolManager.PoolKey calldata, // key
         IPoolManager.SwapParams calldata, // params
         BalanceDelta // delta
     )
         external
-        pure
         override
         returns (bytes4)
     {
         console2.log("afterSwap");
+        _getUserLiquidityPriceUSD(sender);
         return IHooks.afterSwap.selector;
     }
 
@@ -261,6 +262,8 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
         uint256 token0amount;
         uint256 token1amount;
 
+
+        //Price calculations on https://blog.uniswap.org/uniswap-v3-math-primer-2#how-to-calculate-current-holdings
         //Out of range, on the downside
         if(currentTick < userCurrentPosition.tickLower){
             token0amount = SqrtPriceMath.getAmount0Delta(
@@ -282,23 +285,24 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
         //in range position
         }else{
             token0amount = SqrtPriceMath.getAmount0Delta(
-                sqrtPriceLower,
+                sqrtPriceX96,
                 sqrtPriceUpper,
                 userCurrentPosition.liquidity,
                 false
             );
             token1amount = SqrtPriceMath.getAmount1Delta(
                 sqrtPriceLower,
-                sqrtPriceUpper,
+                sqrtPriceX96,
                 userCurrentPosition.liquidity,
                 false
             );
         }
 
-        console2.log("tokensdf0", token0amount, "token1", token1amount);
-        //TOdo adjust for decimals of each token
+        token0amount = token0amount / ERC20(Currency.unwrap(key.currency0)).decimals();
+        token1amount = token1amount / ERC20(Currency.unwrap(key.currency1)).decimals();
 
 
+        console2.log("token0", token0amount, "token1", token1amount);
 
 
 

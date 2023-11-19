@@ -49,10 +49,6 @@ contract UniswapHooksTest is PRBTest, StdCheats {
         address owner = 0x388C818CA8B9251b393131C08a736A67ccB19297;
         poolManager = IPoolManager(address(new PoolManager(type(uint256).max)));
 
-       
-
-
-
         for (uint256 i = 0; i < 1500; i++) {
             bytes32 salt = bytes32(i);
             address expectedAddress = uniswapHooksFactory.getPrecomputedHookAddress(owner, poolManager, salt);
@@ -82,7 +78,7 @@ contract UniswapHooksTest is PRBTest, StdCheats {
 
                (uint256 bukcet, ) = IGhoToken(gho).getFacilitatorBucket(address(deployedHooks));
 
-               console2.log("bucket capacity", bukcet);
+                console2.log("bucket capacity", bukcet);
 
                 console2.log("Token1 address", address(token1));
                 console2.log("Token1 balance", token1.balanceOf(address(this)));
@@ -105,15 +101,42 @@ contract UniswapHooksTest is PRBTest, StdCheats {
     function lockAcquired(uint256, bytes calldata) external returns (bytes memory) {
         IPoolManager.PoolKey memory key = _getPoolKey();
 
+        // First we need two tokens
+        token1 = MockERC20(Currency.unwrap(key.currency0));
+        token2 = MockERC20(Currency.unwrap(key.currency1));
+
         // lets execute all remaining hooks
-        poolManager.modifyPosition(key, IPoolManager.ModifyPositionParams(-60*4, 60*4, 10e6)); //manage ranges with ticks
-        poolManager.donate(key, 100, 100);
+        poolManager.modifyPosition(key, IPoolManager.ModifyPositionParams(-60*10, 60*10, 10e10)); //manage ranges with ticks
+        //poolManager.donate(key, 100, 100);
+    
+        //swap 1
+        console2.log("Token1 balance before swap %e", token1.balanceOf(address(this)));
+        console2.log("Token2 balance before swap %e", token2.balanceOf(address(this)));
 
         // opposite action: poolManager.swap(key, IPoolManager.SwapParams(true, 100, TickMath.MIN_SQRT_RATIO * 1000));
-        poolManager.swap(key, IPoolManager.SwapParams(false, 100, TickMath.MAX_SQRT_RATIO / 1000));
+        poolManager.swap(key, IPoolManager.SwapParams(false, 1e17, TickMath.MAX_SQRT_RATIO / 1000)); //false = buy eth with usdc
+
 
         _settleTokenBalance(Currency.wrap(address(WETH)));
         _settleTokenBalance(Currency.wrap(address(USDC)));
+
+
+        console2.log("Token1 balance after swap %e", token1.balanceOf(address(this)));
+        console2.log("Token2 balance after swap %e", token2.balanceOf(address(this)));
+
+        //swap 2
+        console2.log("Token1 balance before swap %e", token1.balanceOf(address(this)));
+        console2.log("Token2 balance before swap %e", token2.balanceOf(address(this)));
+
+        poolManager.swap(key, IPoolManager.SwapParams(true, 1e8, TickMath.MIN_SQRT_RATIO * 1000)); //true = sell eth for usdc
+
+        _settleTokenBalance(Currency.wrap(address(WETH)));
+        _settleTokenBalance(Currency.wrap(address(USDC)));
+
+
+        console2.log("Token1 balance after swap %e", token1.balanceOf(address(this)));
+        console2.log("Token2 balance after swap %e", token2.balanceOf(address(this)));
+
 
         return new bytes(0);
     }
@@ -155,7 +178,7 @@ contract UniswapHooksTest is PRBTest, StdCheats {
         address owner = 0x388C818CA8B9251b393131C08a736A67ccB19297;
  
         //mint Aeth and Ausdc by depositing into pool
-        deal(WETH, address(this), 100e18);
+        deal(WETH, address(this), 10e18);
         deal(USDC, address(this), 10000e6);
 
         console2.log("hook's WETH balance", ERC20(WETH).balanceOf(address(this)));
