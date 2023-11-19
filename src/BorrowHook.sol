@@ -18,6 +18,7 @@ import { PoolManager, Currency } from "@uniswap/v4-core/contracts/PoolManager.so
 import { TickMath } from "@uniswap/v4-core/contracts/libraries/TickMath.sol";
 import { Fees } from "@uniswap/v4-core/contracts/libraries/Fees.sol";
 import {PoolIdLibrary} from "@uniswap/v4-core/contracts/libraries/PoolId.sol";
+import {SqrtPriceMath} from "@uniswap/v4-core/contracts/libraries/SqrtPriceMath.sol";
 
 contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
     using PoolIdLibrary for IPoolManager.PoolKey;
@@ -30,10 +31,10 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
     address WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
     address USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
 
-    struct userLiquidity{
-        uint256 liquidity;
-        uint256 tickLower;
-        uint256 tickUpper;
+    struct UserLiquidity{
+        uint128 liquidity;
+        int24 tickLower;
+        int24 tickUpper;
     }
 
 
@@ -41,7 +42,7 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
     uint128 public ghoBucketCapacity = 100000e18; //100k gho
 
     mapping(address => uint256) public userDebt;    //user debt
-    mapping(address => uint256) public userCollateral; //user collateral
+    mapping(address => UserLiquidity) public userPosition; //user collateral
 
     mapping(address => bool) public isUserLiquidable; //flag to see if user is liquidable
 
@@ -110,13 +111,13 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
     function beforeModifyPosition(
         address owner, // sender
         IPoolManager.PoolKey calldata, // key
-        IPoolManager.ModifyPositionParams calldata // params
+        IPoolManager.ModifyPositionParams calldata params// params
     )
         external
         override
         returns (bytes4)
     {
-        console2.log("userLiquidity", _getUserLiquidityPriceUSD(owner));
+        
         console2.log("beforeModifyPosition");
         return IHooks.beforeModifyPosition.selector;
     }
@@ -125,14 +126,17 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
     function afterModifyPosition(
         address owner, // sender
         IPoolManager.PoolKey calldata, // key
-        IPoolManager.ModifyPositionParams calldata, // params
+        IPoolManager.ModifyPositionParams calldata params, // params
         BalanceDelta // delta
     )
         external
         override
         returns (bytes4)
     {
-        console2.log("userLiquidity", _getUserLiquidityPriceUSD(owner));
+
+        _storeUserPosition(owner, params);
+        _getUserLiquidityPriceUSD(owner);
+        //console2.log("userLiquidity", _getUserLiquidityPriceUSD(owner));
         IGhoToken(gho).mint(owner, 1e18);
         console2.log("GHO balance", IGhoToken(gho).balanceOf(owner));
         console2.log("afterModifyPosition");
@@ -246,14 +250,81 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
     }
 
     function _getUserLiquidityPriceUSD(address user) internal view returns (uint128){
-        //get user liquidity
+        
         IPoolManager.PoolKey memory key = _getPoolKey();
-        int24 tickLower = TickMath.MIN_TICK;
-        int24 tickUpper = TickMath.MAX_TICK;
-        uint128 userLiquidity = poolManager.getLiquidity(key.toId(),user,  tickLower, tickUpper);
-        console2.log("user liquidity", userLiquidity);
-        return userLiquidity;
+        (uint160 sqrtPriceX96, int24 currentTick, , , , ) = poolManager.getSlot0(key.toId()); //curent price and tick of the pool
+        UserLiquidity memory userCurrentPosition = userPosition[user];
+        
+
+        uint160 sqrtPriceLower = TickMath.getSqrtRatioAtTick(userCurrentPosition.tickLower); //get price as decimal from Q64.96 format
+        uint160 sqrtPriceUpper = TickMath.getSqrtRatioAtTick(userCurrentPosition.tickUpper);
+        uint256 token0amount;
+        uint256 token1amount;
+
+        //Out of range, on the downside
+        if(currentTick < userCurrentPosition.tickLower){
+            token0amount = SqrtPriceMath.getAmount0Delta(
+                sqrtPriceLower,
+                sqrtPriceUpper,
+                userCurrentPosition.liquidity,
+                false
+            );
+            token1amount = 0;
+        //Out of range, on the upside
+        }else if(currentTick >= userCurrentPosition.tickUpper){
+            token0amount = 0;
+            token1amount = SqrtPriceMath.getAmount1Delta(
+                sqrtPriceLower,
+                sqrtPriceUpper,
+                userCurrentPosition.liquidity,
+                false
+            );
+        //in range position
+        }else{
+            token0amount = SqrtPriceMath.getAmount0Delta(
+                sqrtPriceLower,
+                sqrtPriceUpper,
+                userCurrentPosition.liquidity,
+                false
+            );
+            token1amount = SqrtPriceMath.getAmount1Delta(
+                sqrtPriceLower,
+                sqrtPriceUpper,
+                userCurrentPosition.liquidity,
+                false
+            );
+        }
+
+        console2.log("tokensdf0", token0amount, "token1", token1amount);
+        //TOdo adjust for decimals of each token
+
+
+
+
+
+        return 0;
     }   
+
+    function _storeUserPosition(address user, IPoolManager.ModifyPositionParams calldata params) internal{
+        //get user liquidity
+        int24 tickLower = params.tickLower;
+        int24 tickUpper = params.tickUpper;
+
+        IPoolManager.PoolKey memory key = _getPoolKey();
+        (uint160 sqrtPriceX96, int24 currentTick, , , , ) = poolManager.getSlot0(key.toId());
+        uint128 userLiquidity = poolManager.getLiquidity(key.toId(),user,  tickLower, tickUpper);
+
+        userPosition[user] = UserLiquidity(
+            userLiquidity,
+            tickLower,
+            tickUpper
+        );
+
+        console2.log("user liquidity", userLiquidity);
+        console2.log("user tick lower", tickLower);
+        console2.log("user tick upper", tickUpper);
+
+    }
 
 
     //Helper function to return PoolKey
@@ -262,7 +333,7 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
             currency0: Currency.wrap(address(WETH)),
             currency1: Currency.wrap(address(USDC)),
             fee: Fees.DYNAMIC_FEE_FLAG + Fees.HOOK_SWAP_FEE_FLAG + Fees.HOOK_WITHDRAW_FEE_FLAG, // 0xE00000 = 111
-            tickSpacing: 1,
+            tickSpacing: 60,
             hooks: IHooks(address(this))
         });
     }

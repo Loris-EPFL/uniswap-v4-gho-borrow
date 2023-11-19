@@ -106,7 +106,7 @@ contract UniswapHooksTest is PRBTest, StdCheats {
         IPoolManager.PoolKey memory key = _getPoolKey();
 
         // lets execute all remaining hooks
-        poolManager.modifyPosition(key, IPoolManager.ModifyPositionParams(TickMath.MIN_TICK, TickMath.MAX_TICK, 10e6));
+        poolManager.modifyPosition(key, IPoolManager.ModifyPositionParams(-60*4, 60*4, 10e6)); //manage ranges with ticks
         poolManager.donate(key, 100, 100);
 
         // opposite action: poolManager.swap(key, IPoolManager.SwapParams(true, 100, TickMath.MIN_SQRT_RATIO * 1000));
@@ -139,7 +139,7 @@ contract UniswapHooksTest is PRBTest, StdCheats {
             currency0: Currency.wrap(address(WETH)),
             currency1: Currency.wrap(address(USDC)),
             fee: Fees.DYNAMIC_FEE_FLAG + Fees.HOOK_SWAP_FEE_FLAG + Fees.HOOK_WITHDRAW_FEE_FLAG, // 0xE00000 = 111
-            tickSpacing: 1,
+            tickSpacing: 60,
             hooks: IHooks(deployedHooks)
         });
     }
