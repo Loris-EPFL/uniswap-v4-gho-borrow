@@ -106,9 +106,13 @@ contract UniswapHooksTest is PRBTest, StdCheats {
         token1 = MockERC20(Currency.unwrap(key.currency0));
         token2 = MockERC20(Currency.unwrap(key.currency1));
 
+        console2.log("Token1 balance before providing liquidity %e", token1.balanceOf(address(this)));
+        console2.log("Token2 balance before providing liquidity %e", token2.balanceOf(address(this)));
+
+
         // lets execute all remaining hooks
         poolManager.modifyPosition(key, IPoolManager.ModifyPositionParams(-60*6, 60*6, 10e10)); //manage ranges with ticks
-        //poolManager.donate(key, 100, 100);
+        poolManager.donate(key, 10e6, 1000e6);
     
         //swap 1
         console2.log("Token1 balance before swap %e", token1.balanceOf(address(this)));
@@ -119,7 +123,7 @@ contract UniswapHooksTest is PRBTest, StdCheats {
 
 
         // opposite action: poolManager.swap(key, IPoolManager.SwapParams(true, 100, TickMath.MIN_SQRT_RATIO * 1000));
-        poolManager.swap(key, IPoolManager.SwapParams(false, 1e17, sqrtPriceX96Current + sqrtPriceX96Current*maxSlippage/100)); //false = buy eth with usdc
+        poolManager.swap(key, IPoolManager.SwapParams(false, 2e8, sqrtPriceX96Current + sqrtPriceX96Current*maxSlippage/100)); //false = buy eth with usdc
 
 
         _settleTokenBalance(Currency.wrap(address(WETH)));
@@ -133,7 +137,7 @@ contract UniswapHooksTest is PRBTest, StdCheats {
         console2.log("Token1 balance before swap %e", token1.balanceOf(address(this)));
         console2.log("Token2 balance before swap %e", token2.balanceOf(address(this)));
 
-        poolManager.swap(key, IPoolManager.SwapParams(true, 1e18, sqrtPriceX96Current - sqrtPriceX96Current*maxSlippage/100)); //true = sell eth for usdc
+        poolManager.swap(key, IPoolManager.SwapParams(true, 2e9, sqrtPriceX96Current - sqrtPriceX96Current*maxSlippage/100)); //true = sell eth for usdc
 
         _settleTokenBalance(Currency.wrap(address(WETH)));
         _settleTokenBalance(Currency.wrap(address(USDC)));
@@ -149,16 +153,31 @@ contract UniswapHooksTest is PRBTest, StdCheats {
     function _settleTokenBalance(Currency token) private {
         int256 unsettledTokenBalance = poolManager.getCurrencyDelta(0, token);
 
+        console2.log("unsettledTokenBalance", unsettledTokenBalance);
+
         if (unsettledTokenBalance == 0) {
             return;
         }
 
         if (unsettledTokenBalance < 0) {
-            poolManager.take(token, msg.sender, uint256(-unsettledTokenBalance));
+            console2.log("msg sender is ", msg.sender);
+            //poolManager.take(token, msg.sender, uint256(-unsettledTokenBalance));
+            poolManager.take(token, address(this), uint256(-unsettledTokenBalance)); //take from pool manager to test address because otherwise it sends from poolManager to itslef
+
             return;
         }
 
-        token.transfer(address(poolManager), uint256(unsettledTokenBalance));
+        
+        if(unsettledTokenBalance > 0){
+            console2.log("msg sender is ", msg.sender);
+            poolManager.mint(token, (msg.sender), uint256(unsettledTokenBalance));
+
+        }
+        
+
+        //token.transfer(address(poolManager), uint256(unsettledTokenBalance));
+        token.transfer(address(msg.sender), uint256(unsettledTokenBalance));
+
         poolManager.settle(token);
     }
 
@@ -183,7 +202,7 @@ contract UniswapHooksTest is PRBTest, StdCheats {
         address owner = 0x388C818CA8B9251b393131C08a736A67ccB19297;
  
         //mint Aeth and Ausdc by depositing into pool
-        deal(WETH, address(this), 10e18);
+        deal(WETH, address(this), 1e18);
         deal(USDC, address(this), 10000e6);
 
         console2.log("hook's WETH balance", ERC20(WETH).balanceOf(address(this)));

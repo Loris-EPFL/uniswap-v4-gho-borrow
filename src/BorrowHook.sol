@@ -318,6 +318,7 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
         (uint160 sqrtPriceX96, int24 currentTick, , , , ) = poolManager.getSlot0(key.toId());
         uint128 userLiquidity = poolManager.getLiquidity(key.toId(),user,  tickLower, tickUpper);
 
+
         userPosition[user] = UserLiquidity(
             userLiquidity,
             tickLower,
