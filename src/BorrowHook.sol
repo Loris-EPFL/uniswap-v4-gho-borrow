@@ -20,6 +20,10 @@ import { Fees } from "@uniswap/v4-core/contracts/libraries/Fees.sol";
 import {PoolIdLibrary} from "@uniswap/v4-core/contracts/libraries/PoolId.sol";
 import {SqrtPriceMath} from "@uniswap/v4-core/contracts/libraries/SqrtPriceMath.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {PricesOracle} from "./PriceOracleImplementation/EthPrice.sol";
+import {UsdcPrice} from "./PriceOracleImplementation/UsdcPrice.sol";
+import {PythStructs} from "./PriceOracle/PythStructs.sol";
+import {IPyth} from "./PriceOracle/IPyth.sol";
 
 contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
     using PoolIdLibrary for IPoolManager.PoolKey;
@@ -31,6 +35,14 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
     address public gho = 0x40D16FC0246aD3160Ccc09B8D0D3A2cD28aE6C2f;
     address WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
     address USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
+
+    //Pyth Mainnet Price Feed address
+    address pythPrice = 0x4305FB66699C3B2702D4d05CF36551390A4c69C6;
+
+    IPyth pythOracle;
+
+    PricesOracle ethPriceFeed;
+    UsdcPrice usdcPriceFeed;
 
     struct UserLiquidity{
         uint128 liquidity;
@@ -100,10 +112,12 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
         int24 // tick
     )
         external
-        pure
         override
         returns (bytes4)
     {
+
+        IPyth pythOracle = IPyth(pythPrice);
+        //UsdcPrice usdcPriceFeed = new UsdcPrice(pythPrice);
         console2.log("afterInitialize");
         return IHooks.afterInitialize.selector;
     }
@@ -250,7 +264,7 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
         userDebt[user] -= amount;
     }
 
-    function _getUserLiquidityPriceUSD(address user) internal view returns (uint128){
+    function _getUserLiquidityPriceUSD(address user) internal  returns (uint128){
         
         IPoolManager.PoolKey memory key = _getPoolKey();
         (uint160 sqrtPriceX96, int24 currentTick, , , , ) = poolManager.getSlot0(key.toId()); //curent price and tick of the pool
@@ -299,10 +313,18 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
         }
 
         token0amount = token0amount / ERC20(Currency.unwrap(key.currency0)).decimals();
-        token1amount = token1amount / ERC20(Currency.unwrap(key.currency1)).decimals();
+        token1amount = token1amount / ERC20(Currency.unwrap(key.currency1)).decimals(); 
+        bytes[] memory data = new bytes[](1);
+
+        //PythStructs.Price memory ethPrice = ethPriceFeed.getEthUsdPrice(data);
+        //PythStructs.Price memory usdcPrice = usdcPriceFeed.getUsdcUsdPrice();
+        //PythStructs.Price memory ethPrice = ethPriceFeed.getPrice(0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace);
+        PythStructs.Price memory ethPrice = pythOracle.getPrice(0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace);
 
 
         console2.log("token0", token0amount, "token1", token1amount);
+
+        console2.log("eth price", ethPrice.price);
 
 
 
