@@ -107,7 +107,7 @@ contract UniswapHooksTest is PRBTest, StdCheats {
         token2 = MockERC20(Currency.unwrap(key.currency1));
 
         // lets execute all remaining hooks
-        poolManager.modifyPosition(key, IPoolManager.ModifyPositionParams(-60*6, 60*6, 10e10)); //manage ranges with ticks
+        poolManager.modifyPosition(key, IPoolManager.ModifyPositionParams(-60*6, 60*6, 10e8)); //manage ranges with ticks
         //poolManager.donate(key, 100, 100);
     
         //swap 1

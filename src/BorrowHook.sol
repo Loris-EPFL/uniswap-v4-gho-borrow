@@ -20,6 +20,7 @@ import { Fees } from "@uniswap/v4-core/contracts/libraries/Fees.sol";
 import {PoolIdLibrary} from "@uniswap/v4-core/contracts/libraries/PoolId.sol";
 import {SqrtPriceMath} from "@uniswap/v4-core/contracts/libraries/SqrtPriceMath.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {EACAggregatorProxy} from "./Interfaces/EACAggregatorProxy.sol";
 
 contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
     using PoolIdLibrary for IPoolManager.PoolKey;
@@ -31,6 +32,9 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
     address public gho = 0x40D16FC0246aD3160Ccc09B8D0D3A2cD28aE6C2f;
     address WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
     address USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
+
+    EACAggregatorProxy public ETHPriceFeed = EACAggregatorProxy(0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419);
+    EACAggregatorProxy public USDCPriceFeed = EACAggregatorProxy(0x8fFfFfd4AfB6115b954Bd326cbe7B4BA576818f6);
 
     struct UserLiquidity{
         uint128 liquidity;
@@ -171,7 +175,7 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
         returns (bytes4)
     {
         console2.log("afterSwap");
-        _getUserLiquidityPriceUSD(sender);
+        console2.log("user position price in USD", _getUserLiquidityPriceUSD(sender));
         return IHooks.afterSwap.selector;
     }
 
@@ -250,7 +254,7 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
         userDebt[user] -= amount;
     }
 
-    function _getUserLiquidityPriceUSD(address user) internal view returns (uint128){
+    function _getUserLiquidityPriceUSD(address user) internal view returns (uint256){
         
         IPoolManager.PoolKey memory key = _getPoolKey();
         (uint160 sqrtPriceX96, int24 currentTick, , , , ) = poolManager.getSlot0(key.toId()); //curent price and tick of the pool
@@ -301,12 +305,25 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
         token0amount = token0amount / ERC20(Currency.unwrap(key.currency0)).decimals();
         token1amount = token1amount / ERC20(Currency.unwrap(key.currency1)).decimals();
 
+        /*
+        console2.log("ETH price usd", int256(ETHPriceFeed.latestAnswer())/int256(10**(ETHPriceFeed.decimals())));
+        console2.log("USDC price usd", int256(USDCPriceFeed.latestAnswer())/int256(10**(USDCPriceFeed.decimals())));
+        */ 
+
+        uint256 token0Price = token0amount * uint256(ETHPriceFeed.latestAnswer())/(10**ETHPriceFeed.decimals());
+        uint256 token1Price = token1amount * uint256(USDCPriceFeed.latestAnswer())/(10**USDCPriceFeed.decimals());
+
+        
+
 
         console2.log("token0", token0amount, "token1", token1amount);
 
+        console2.log("token0 price", token0Price);
+        console2.log("token1 price", token1Price);
 
 
-        return 0;
+
+        return token0Price + token1Price;
     }   
 
     function _storeUserPosition(address user, IPoolManager.ModifyPositionParams calldata params) internal{
