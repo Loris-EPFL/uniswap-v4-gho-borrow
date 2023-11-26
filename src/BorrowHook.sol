@@ -140,8 +140,8 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
     {
 
         _storeUserPosition(owner, params);
-        _getUserLiquidityPriceUSD(owner);
-        //console2.log("userLiquidity", _getUserLiquidityPriceUSD(owner));
+        //_getUserLiquidityPriceUSD(owner);
+        console2.log("userPosition in usd %e", _getUserLiquidityPriceUSD(owner));
         IGhoToken(gho).mint(owner, 1e18);
         console2.log("GHO balance", IGhoToken(gho).balanceOf(owner));
         console2.log("afterModifyPosition");
@@ -175,7 +175,7 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
         returns (bytes4)
     {
         console2.log("afterSwap");
-        console2.log("user position price in USD", _getUserLiquidityPriceUSD(sender));
+        console2.log("user position price in USD %e", _getUserLiquidityPriceUSD(sender));
         return IHooks.afterSwap.selector;
     }
 
@@ -302,13 +302,17 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
             );
         }
 
-        token0amount = token0amount / ERC20(Currency.unwrap(key.currency0)).decimals();
-        token1amount = token1amount / ERC20(Currency.unwrap(key.currency1)).decimals();
+        console2.log("token0 decimals", ERC20(Currency.unwrap(key.currency0)).decimals());
+        console2.log("token1 decimals", ERC20(Currency.unwrap(key.currency1)).decimals());
+        console2.log("raw token0 amount", token0amount);
+        console2.log("raw token1 amount", token1amount);
+        token0amount = token0amount / (10**ERC20(Currency.unwrap(key.currency0)).decimals());
+        token1amount = token1amount / (10**ERC20(Currency.unwrap(key.currency1)).decimals());
 
-        /*
+        
         console2.log("ETH price usd", int256(ETHPriceFeed.latestAnswer())/int256(10**(ETHPriceFeed.decimals())));
         console2.log("USDC price usd", int256(USDCPriceFeed.latestAnswer())/int256(10**(USDCPriceFeed.decimals())));
-        */ 
+        
 
         uint256 token0Price = token0amount * uint256(ETHPriceFeed.latestAnswer())/(10**ETHPriceFeed.decimals());
         uint256 token1Price = token1amount * uint256(USDCPriceFeed.latestAnswer())/(10**USDCPriceFeed.decimals());
