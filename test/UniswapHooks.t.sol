@@ -100,11 +100,14 @@ contract UniswapHooksTest is PRBTest, StdCheats {
 
     function lockAcquired(uint256, bytes calldata) external returns (bytes memory) {
         IPoolManager.PoolKey memory key = _getPoolKey();
-        address alice = makeAddr("alice");
+       
 
         // First we need two tokens
         token1 = MockERC20(Currency.unwrap(key.currency0));
         token2 = MockERC20(Currency.unwrap(key.currency1));
+
+        token1.approve(address(poolManager), type(uint256).max);
+        token2.approve(address(poolManager), type(uint256).max);
 
         console2.log("Token1 balance before providing liquidity %e", token1.balanceOf(address(this)));
         console2.log("Token2 balance before providing liquidity %e", token2.balanceOf(address(this)));
@@ -112,7 +115,11 @@ contract UniswapHooksTest is PRBTest, StdCheats {
 
 
         // lets execute all remaining hooks
-        poolManager.modifyPosition(key, IPoolManager.ModifyPositionParams(-60*6, 60*6, 10e10)); //manage ranges with ticks
+        poolManager.modifyPosition(key, IPoolManager.ModifyPositionParams(-60*100, 60*6, 20e10)); //manage ranges with ticks
+
+        _settleTokenBalance(Currency.wrap(address(WETH)));
+        _settleTokenBalance(Currency.wrap(address(USDC)));
+
         poolManager.donate(key, 1e8, 1e8);
 
         console2.log("Token1 balance after providing liquidity %e", token1.balanceOf(address(this)));
@@ -121,9 +128,12 @@ contract UniswapHooksTest is PRBTest, StdCheats {
 
 
         //test borrow gho
-        uint256 ghoBorrowAmount = 1e18;
-        deployedHooks.borrowGho(ghoBorrowAmount, alice);
-        console2.log("GHO balance of alice %e", IGhoToken(gho).balanceOf(alice));
+        
+        //address alice = makeAddr("alice");
+        uint256 ghoBorrowAmount = 49920e18;
+        deployedHooks.borrowGho(ghoBorrowAmount, address(this));
+        console2.log("GHO balance of alice %e", IGhoToken(gho).balanceOf(address(this)));
+        
 
     
         //swap 1
@@ -199,7 +209,7 @@ contract UniswapHooksTest is PRBTest, StdCheats {
  
         //mint Aeth and Ausdc by depositing into pool
         deal(WETH, address(this), 10e18);
-        deal(USDC, address(this), 10000e6);
+        deal(USDC, address(this), 100000e6);
 
         console2.log("hook's WETH balance", ERC20(WETH).balanceOf(address(this)));
         console2.log("hook's USDC balance", ERC20(USDC).balanceOf(address(this)));

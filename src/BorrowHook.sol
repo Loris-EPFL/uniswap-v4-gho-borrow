@@ -143,7 +143,6 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
         _storeUserPosition(owner, params);
         //_getUserLiquidityPriceUSD(owner);
         console2.log("userPosition in usd %e", _getUserLiquidityPriceUSD(owner).unwrap());
-        IGhoToken(gho).mint(owner, 1e18);
         console2.log("GHO balance", IGhoToken(gho).balanceOf(owner));
         console2.log("afterModifyPosition");
         return IHooks.afterModifyPosition.selector;
@@ -236,8 +235,11 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
             revert("amount to borrow is inferior to 1 GHO");
         }
         //TODO : implement logic to check if user has enough collateral to borrow
+        console2.log("user price position %e", _getUserLiquidityPriceUSD(user).unwrap());
+        console2.log("amount requested %e", amount);    
+        console2.log("amount calculated to borrow %e", (UD60x18.wrap((amount+ userDebt[user])).div(UD60x18.wrap(10**ERC20(gho).decimals()))).mul(UD60x18.wrap(100)).div(UD60x18.wrap(maxLTV)).unwrap());
         //get user position price in USD, then check if borrow amount + debt already owed (adjusted to gho decimals) is inferior to maxLTV (80% = maxLTV/100)
-        if(_getUserLiquidityPriceUSD(user) <= (UD60x18.wrap((amount+ userDebt[user])).div(UD60x18.wrap(ERC20(gho).decimals()))).mul(UD60x18.wrap(100)).div(UD60x18.wrap(maxLTV))){ 
+        if(_getUserLiquidityPriceUSD(user) <= (UD60x18.wrap((amount+ userDebt[user])).div(UD60x18.wrap(10**ERC20(gho).decimals()))).mul(UD60x18.wrap(100)).div(UD60x18.wrap(maxLTV))){ 
             revert("user LTV is superior to maximum LTV"); //TODO add proper error message
         }
         userDebt[user] += amount;
@@ -302,9 +304,15 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
                 false
             );
         }
+        /*
+        console2.log("token0 amount from ERC20 %e", ERC20(Currency.unwrap(key.currency0)).balanceOf(address(poolManager)));
+        console2.log("token1 amount from ERC20 %e", ERC20(Currency.unwrap(key.currency1)).balanceOf(address(poolManager)));
 
-        console2.log("token0 amount %e", token0amount);
-        console2.log("token1 amount %e", token1amount);
+
+
+        console2.log("token0 amount %e", token0amount / 10**ERC20(Currency.unwrap(key.currency0)).decimals());
+        console2.log("token1 amount %e", token1amount / 10**ERC20(Currency.unwrap(key.currency1)).decimals());
+        */
 
        
 
@@ -312,10 +320,28 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
         UD60x18 token0amountUD60x18 = UD60x18.wrap(token0amount).div(UD60x18.wrap(10**ERC20(Currency.unwrap(key.currency0)).decimals()));
         UD60x18 token1amountUD60x18 = UD60x18.wrap(token1amount).div(UD60x18.wrap(10**ERC20(Currency.unwrap(key.currency1)).decimals()));
 
+        /*
+        console2.log("token0 amount UD60x18 %e", token0amountUD60x18.unwrap());
+        console2.log("token0 amount UD60x18 %e", token1amountUD60x18.unwrap());
+        */
+
+
        
         //Price feed from Chainlink, convert to UD60x18 to avoid overflow errors
+
+        /*
+        console2.log("ETH price %e", uint256(ETHPriceFeed.latestAnswer()) / 10**ETHPriceFeed.decimals());
+        //console2.log("with %e decimals", ETHPriceFeed.decimals());
+        console2.log("USDC price %e", uint256(USDCPriceFeed.latestAnswer()) / 10**USDCPriceFeed.decimals());
+        //console2.log("with %e decimals", USDCPriceFeed.decimals());
+        */
         UD60x18 ETHPrice = UD60x18.wrap(uint256(ETHPriceFeed.latestAnswer())).div(UD60x18.wrap(10**ETHPriceFeed.decimals()));
         UD60x18 USDCPrice = UD60x18.wrap(uint256(USDCPriceFeed.latestAnswer())).div(UD60x18.wrap(10**USDCPriceFeed.decimals()));
+
+        /*
+        console2.log("ETH price UDx60 %e", ETHPrice.unwrap());
+        console2.log("USDC price UDx60 %e", USDCPrice.unwrap());
+        */
        
 
         //Price value of each token in the position
@@ -323,14 +349,15 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
         UD60x18 token1Price = token1amountUD60x18.mul(USDCPrice);
 
         
-
+        /*
         //Amount of token0 and token1 in the position
         console2.log("token0 in UD60 %e", UD60x18.unwrap(token0amountUD60x18));
         console2.log("token1 in UD60 %e", UD60x18.unwrap(token1amountUD60x18));
+        */
 
        
         //Price value of the position
-        console2.log("position price %e", token0Price.add(token1Price).unwrap());
+        console2.log("position price %e", (token0Price.add(token1Price)).unwrap()/(10**18));
 
 
         //return price value of the position as UD60x18
