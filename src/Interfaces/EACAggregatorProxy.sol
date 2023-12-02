@@ -1,5 +1,6 @@
 pragma solidity ^0.8.10;
 
+//Standard Chainlink Price Feed Interface
 interface EACAggregatorProxy {
     event AnswerUpdated(int256 indexed current, uint256 indexed roundId, uint256 updatedAt);
     event NewRound(uint256 indexed roundId, address indexed startedBy, uint256 startedAt);
