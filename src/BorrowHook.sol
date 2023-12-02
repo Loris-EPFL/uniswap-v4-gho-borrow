@@ -28,8 +28,7 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
     address public owner;
 
     uint8 maxLTV = 80; //80%
-    address public ghoVariableDebtToken = 0x3FEaB6F8510C73E05b8C0Fdf96Df012E3A144319;
-
+    uint256 minBorrowAmount = 1e18; //1 GHO
     address public gho = 0x40D16FC0246aD3160Ccc09B8D0D3A2cD28aE6C2f;
     address WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
     address USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
@@ -80,19 +79,6 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
         override
         returns (bytes4)
     {
-        //replace with gho's variable debt token interface or stable debt ???
-        /*ICreditDelegationToken(ghoVariableDebtToken).approveDelegation(
-            debtHandler, 
-            type(uint256).max
-            ); //approve max gho debt to debtHandler contract
-        */
-        //adds the hook address as a gho faciliator, need permissions to do that (check IghoToken.sol)
-        /*
-        IGhoToken(gho).addFacilitator(
-            address(this),
-            "BorrowHook",
-            ghoBucketCapacity);
-        */
         console2.log("beforeInitialize");
         return IHooks.beforeInitialize.selector;
     }
@@ -141,9 +127,7 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
     {
 
         _storeUserPosition(owner, params);
-        //_getUserLiquidityPriceUSD(owner);
         console2.log("userPosition in usd %e", _getUserLiquidityPriceUSD(owner).unwrap());
-        console2.log("GHO balance", IGhoToken(gho).balanceOf(owner));
         console2.log("afterModifyPosition");
         return IHooks.afterModifyPosition.selector;
     }
@@ -230,8 +214,8 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
     }
 
     function borrowGho(uint256 amount, address user) public returns (bool, uint256){
-        //borrow gho from ghoVariableDebtToken
-        if(amount < 1e18){
+        //if amount is inferior to min amount, revert
+        if(amount < minBorrowAmount){
             revert("amount to borrow is inferior to 1 GHO");
         }
         //TODO : implement logic to check if user has enough collateral to borrow
@@ -251,18 +235,20 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
         return userDebt[user];
     }
 
-    function repayGho(uint256 amount, address user) public returns (bool, uint256){
-        //repay gho to ghoVariableDebtToken
-        //TODO : implement logic to check if user has enough gho to repay
+    function repayGho(uint256 amount, address user) public returns (bool){
+        //check if user has debt already
         if(userDebt[user] < amount){
             revert("user debt is inferior to amount to repay");
         }
+        //check if user has enough gho to repay, need to approve first then repay 
         bool isSuccess = ERC20(gho).transferFrom(user, address(this), amount); //send gho to this address then burning it
         if(!isSuccess){
             revert("transferFrom failed");
+            return false;
         }else{
             IGhoToken(gho).burn(amount);
             userDebt[user] -= amount;
+            return true;
         }
         
     }
@@ -273,7 +259,7 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
         (uint160 sqrtPriceX96, int24 currentTick, , , , ) = poolManager.getSlot0(key.toId()); //curent price and tick of the pool
         UserLiquidity memory userCurrentPosition = userPosition[user];
         
-
+        //Lower and Upper tick of the position
         uint160 sqrtPriceLower = TickMath.getSqrtRatioAtTick(userCurrentPosition.tickLower); //get price as decimal from Q64.96 format
         uint160 sqrtPriceUpper = TickMath.getSqrtRatioAtTick(userCurrentPosition.tickUpper);
         uint256 token0amount;
@@ -314,61 +300,21 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
                 false
             );
         }
-        /*
-        console2.log("token0 amount from ERC20 %e", ERC20(Currency.unwrap(key.currency0)).balanceOf(address(poolManager)));
-        console2.log("token1 amount from ERC20 %e", ERC20(Currency.unwrap(key.currency1)).balanceOf(address(poolManager)));
-
-
-
-        console2.log("token0 amount %e", token0amount / 10**ERC20(Currency.unwrap(key.currency0)).decimals());
-        console2.log("token1 amount %e", token1amount / 10**ERC20(Currency.unwrap(key.currency1)).decimals());
-        */
-
-       
-
+    
         //Use UD60x18 to convert token amount to decimal adjusted to avoid overflow errors
         UD60x18 token0amountUD60x18 = UD60x18.wrap(token0amount).div(UD60x18.wrap(10**ERC20(Currency.unwrap(key.currency0)).decimals()));
         UD60x18 token1amountUD60x18 = UD60x18.wrap(token1amount).div(UD60x18.wrap(10**ERC20(Currency.unwrap(key.currency1)).decimals()));
 
-        /*
-        console2.log("token0 amount UD60x18 %e", token0amountUD60x18.unwrap());
-        console2.log("token0 amount UD60x18 %e", token1amountUD60x18.unwrap());
-        */
-
-
-       
         //Price feed from Chainlink, convert to UD60x18 to avoid overflow errors
-
-        /*
-        console2.log("ETH price %e", uint256(ETHPriceFeed.latestAnswer()) / 10**ETHPriceFeed.decimals());
-        //console2.log("with %e decimals", ETHPriceFeed.decimals());
-        console2.log("USDC price %e", uint256(USDCPriceFeed.latestAnswer()) / 10**USDCPriceFeed.decimals());
-        //console2.log("with %e decimals", USDCPriceFeed.decimals());
-        */
         UD60x18 ETHPrice = UD60x18.wrap(uint256(ETHPriceFeed.latestAnswer())).div(UD60x18.wrap(10**ETHPriceFeed.decimals()));
         UD60x18 USDCPrice = UD60x18.wrap(uint256(USDCPriceFeed.latestAnswer())).div(UD60x18.wrap(10**USDCPriceFeed.decimals()));
-
-        /*
-        console2.log("ETH price UDx60 %e", ETHPrice.unwrap());
-        console2.log("USDC price UDx60 %e", USDCPrice.unwrap());
-        */
-       
 
         //Price value of each token in the position
         UD60x18 token0Price = token0amountUD60x18.mul(ETHPrice);
         UD60x18 token1Price = token1amountUD60x18.mul(USDCPrice);
-
-        
-        /*
-        //Amount of token0 and token1 in the position
-        console2.log("token0 in UD60 %e", UD60x18.unwrap(token0amountUD60x18));
-        console2.log("token1 in UD60 %e", UD60x18.unwrap(token1amountUD60x18));
-        */
-
        
         //Price value of the position
         console2.log("position price %e", (token0Price.add(token1Price)).unwrap()/(10**18));
-
 
         //return price value of the position as UD60x18
         return token0Price.add(token1Price);
