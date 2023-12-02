@@ -17,6 +17,7 @@
     "@aave/core-v3/=lib/aave-v3-core/",
     "@aave/v3-periphery/=lib/aave-v3-periphery/",
     "@openzeppelin/=lib/openzeppelin-contracts/",
-    "@aave/gho/=lib/gho-core/src/contracts/"
+    "@aave/gho/=lib/gho-core/src/contracts/",
+    "@prb-math/=lib/prb-math/src/"
   ]
 }
