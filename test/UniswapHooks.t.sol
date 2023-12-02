@@ -130,9 +130,15 @@ contract UniswapHooksTest is PRBTest, StdCheats {
         //test borrow gho
         
         //address alice = makeAddr("alice");
-        uint256 ghoBorrowAmount = 49920e18;
+        uint256 ghoBorrowAmount = 2000e18;
         deployedHooks.borrowGho(ghoBorrowAmount, address(this));
-        console2.log("GHO balance of alice %e", IGhoToken(gho).balanceOf(address(this)));
+        console2.log("GHO balance of this test %e", IGhoToken(gho).balanceOf(address(this)));
+        
+        //test view gho debt
+        uint256 debt = deployedHooks.viewGhoDebt(address(this));
+        console2.log("GHO debt of this test %e", debt);
+
+        
         
 
     
@@ -166,6 +172,15 @@ contract UniswapHooksTest is PRBTest, StdCheats {
 
         console2.log("Token1 balance after swap %e", token1.balanceOf(address(this)));
         console2.log("Token2 balance after swap %e", token2.balanceOf(address(this)));
+
+        //test repay gho
+        ERC20(gho).approve(address(deployedHooks), type(uint256).max);
+        deployedHooks.repayGho(debt, address(this));
+
+        //test view gho debt after repaying
+        debt = deployedHooks.viewGhoDebt(address(this));
+        console2.log("GHO debt after repaying of this test %e", debt);
+
 
 
         return new bytes(0);

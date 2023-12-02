@@ -175,7 +175,7 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
         returns (bytes4)
     {
         console2.log("afterSwap");
-        console2.log("user position price in USD %e", _getUserLiquidityPriceUSD(sender).unwrap());
+        console2.log("user position price in USD after swap %e", _getUserLiquidityPriceUSD(sender).unwrap() / 10**18);
         return IHooks.afterSwap.selector;
     }
 
@@ -235,16 +235,20 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
             revert("amount to borrow is inferior to 1 GHO");
         }
         //TODO : implement logic to check if user has enough collateral to borrow
-        console2.log("user price position %e", _getUserLiquidityPriceUSD(user).unwrap());
+        console2.log("user price position before borrowing %e", _getUserLiquidityPriceUSD(user).unwrap() / 10**18);
         console2.log("amount requested %e", amount);    
-        console2.log("amount calculated to borrow %e", (UD60x18.wrap((amount+ userDebt[user])).div(UD60x18.wrap(10**ERC20(gho).decimals()))).mul(UD60x18.wrap(100)).div(UD60x18.wrap(maxLTV)).unwrap());
+        console2.log("Max borrow amount %e", _getUserLiquidityPriceUSD(user).sub((UD60x18.wrap(userDebt[user])).div(UD60x18.wrap(10**ERC20(gho).decimals()))).mul(UD60x18.wrap(maxLTV)).div(UD60x18.wrap(100)).unwrap());
         //get user position price in USD, then check if borrow amount + debt already owed (adjusted to gho decimals) is inferior to maxLTV (80% = maxLTV/100)
-        if(_getUserLiquidityPriceUSD(user) <= (UD60x18.wrap((amount+ userDebt[user])).div(UD60x18.wrap(10**ERC20(gho).decimals()))).mul(UD60x18.wrap(100)).div(UD60x18.wrap(maxLTV))){ 
+        if(_getUserLiquidityPriceUSD(user).lte((UD60x18.wrap((amount+ userDebt[user])).div(UD60x18.wrap(10**ERC20(gho).decimals()))).mul(UD60x18.wrap(maxLTV)).div(UD60x18.wrap(100)))){ 
             revert("user LTV is superior to maximum LTV"); //TODO add proper error message
         }
         userDebt[user] += amount;
         IGhoToken(gho).mint(user, amount);
     
+    }
+
+    function viewGhoDebt(address user) public view returns (uint256){
+        return userDebt[user];
     }
 
     function repayGho(uint256 amount, address user) public returns (bool, uint256){
@@ -253,8 +257,14 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
         if(userDebt[user] < amount){
             revert("user debt is inferior to amount to repay");
         }
-        IGhoToken(gho).burn(amount);
-        userDebt[user] -= amount;
+        bool isSuccess = ERC20(gho).transferFrom(user, address(this), amount); //send gho to this address then burning it
+        if(!isSuccess){
+            revert("transferFrom failed");
+        }else{
+            IGhoToken(gho).burn(amount);
+            userDebt[user] -= amount;
+        }
+        
     }
 
     function _getUserLiquidityPriceUSD(address user) internal view returns (UD60x18){
