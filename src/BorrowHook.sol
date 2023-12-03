@@ -22,9 +22,12 @@ import {SqrtPriceMath} from "@uniswap/v4-core/contracts/libraries/SqrtPriceMath.
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {EACAggregatorProxy} from "./Interfaces/EACAggregatorProxy.sol";
 import {UD60x18} from "@prb-math/UD60x18.sol";
+import {IterableMapping} from "./utils/IterableMapping.sol";
 
 contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
     using PoolIdLibrary for IPoolManager.PoolKey;
+    using IterableMapping for IterableMapping.Map;
+
     address public owner;
 
     uint8 maxLTV = 80; //80%
@@ -33,8 +36,8 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
     address WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
     address USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
 
-    EACAggregatorProxy public ETHPriceFeed = EACAggregatorProxy(0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419);
-    EACAggregatorProxy public USDCPriceFeed = EACAggregatorProxy(0x8fFfFfd4AfB6115b954Bd326cbe7B4BA576818f6);
+    EACAggregatorProxy public ETHPriceFeed = EACAggregatorProxy(0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419); //chainlink ETH price feed
+    EACAggregatorProxy public USDCPriceFeed = EACAggregatorProxy(0x8fFfFfd4AfB6115b954Bd326cbe7B4BA576818f6); //chainlink USDC price feed
 
     struct UserLiquidity{
         uint128 liquidity;
@@ -46,7 +49,7 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
     //max bucket capacity (= max total mintable gho capacity)
     uint128 public ghoBucketCapacity = 100000e18; //100k gho
 
-    mapping(address => uint256) public userDebt;    //user debt
+    IterableMapping.Map private usersDebt; //users
     mapping(address => UserLiquidity) public userPosition; //user collateral
 
     mapping(address => bool) public isUserLiquidable; //flag to see if user is liquidable
@@ -109,6 +112,17 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
         override
         returns (bytes4)
     {
+
+        
+        if(params.liquidityDelta < 0 ){
+            //If user try to withdraw (delta negative) and has debt, revert
+            uint256 liquidity = uint256(-params.liquidityDelta);
+            console2.log("liquidity to withdraw %e", uint128(liquidity));
+            console2.log("can withdraw ? ", _canUserWithdraw(owner, params.tickLower, params.tickUpper, uint128(liquidity)));
+            if(!_canUserWithdraw(owner, params.tickLower, params.tickUpper, uint128(liquidity))){
+                 revert("user has debt, cannot withdraw"); //todo allow partial withdraw according to debt
+            }
+        }
         
         console2.log("beforeModifyPosition");
         return IHooks.beforeModifyPosition.selector;
@@ -127,7 +141,7 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
     {
 
         _storeUserPosition(owner, params);
-        console2.log("userPosition in usd %e", _getUserLiquidityPriceUSD(owner).unwrap());
+        console2.log("userPosition in usd %e", _getUserLiquidityPriceUSD(owner).unwrap() / 10**18);
         console2.log("afterModifyPosition");
         return IHooks.afterModifyPosition.selector;
     }
@@ -221,23 +235,23 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
         //TODO : implement logic to check if user has enough collateral to borrow
         console2.log("user price position before borrowing %e", _getUserLiquidityPriceUSD(user).unwrap() / 10**18);
         console2.log("amount requested %e", amount);    
-        console2.log("Max borrow amount %e", _getUserLiquidityPriceUSD(user).sub((UD60x18.wrap(userDebt[user])).div(UD60x18.wrap(10**ERC20(gho).decimals()))).mul(UD60x18.wrap(maxLTV)).div(UD60x18.wrap(100)).unwrap());
+        console2.log("Max borrow amount %e", _getUserLiquidityPriceUSD(user).sub((UD60x18.wrap(usersDebt.get(user))).div(UD60x18.wrap(10**ERC20(gho).decimals()))).mul(UD60x18.wrap(maxLTV)).div(UD60x18.wrap(100)).unwrap());
         //get user position price in USD, then check if borrow amount + debt already owed (adjusted to gho decimals) is inferior to maxLTV (80% = maxLTV/100)
-        if(_getUserLiquidityPriceUSD(user).lte((UD60x18.wrap((amount+ userDebt[user])).div(UD60x18.wrap(10**ERC20(gho).decimals()))).mul(UD60x18.wrap(maxLTV)).div(UD60x18.wrap(100)))){ 
+        if(_getUserLiquidityPriceUSD(user).lte((UD60x18.wrap((amount+ usersDebt.get(user))).div(UD60x18.wrap(10**ERC20(gho).decimals()))).mul(UD60x18.wrap(maxLTV)).div(UD60x18.wrap(100)))){ 
             revert("user LTV is superior to maximum LTV"); //TODO add proper error message
         }
-        userDebt[user] += amount;
+        usersDebt.set(user, usersDebt.get(user) + amount);
         IGhoToken(gho).mint(user, amount);
     
     }
 
     function viewGhoDebt(address user) public view returns (uint256){
-        return userDebt[user];
+        return usersDebt.get(user);
     }
 
     function repayGho(uint256 amount, address user) public returns (bool){
         //check if user has debt already
-        if(userDebt[user] < amount){
+        if(usersDebt.get(user) < amount){
             revert("user debt is inferior to amount to repay");
         }
         //check if user has enough gho to repay, need to approve first then repay 
@@ -247,7 +261,7 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
             return false;
         }else{
             IGhoToken(gho).burn(amount);
-            userDebt[user] -= amount;
+            usersDebt.set(user, usersDebt.get(user) - amount);
             return true;
         }
         
@@ -320,6 +334,72 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
         return token0Price.add(token1Price);
     }   
 
+
+    function _getPositionUsdPrice(int24 tickLower, int24 tickUpper, uint128 liquidity) internal view returns (UD60x18){
+        IPoolManager.PoolKey memory key = _getPoolKey();
+        (uint160 sqrtPriceX96, int24 currentTick, , , , ) = poolManager.getSlot0(key.toId()); //curent price and tick of the pool
+        
+        //Lower and Upper tick of the position
+        uint160 sqrtPriceLower = TickMath.getSqrtRatioAtTick(tickLower); //get price as decimal from Q64.96 format
+        uint160 sqrtPriceUpper = TickMath.getSqrtRatioAtTick(tickUpper);
+        uint256 token0amount;
+        uint256 token1amount;
+
+        //Price calculations on https://blog.uniswap.org/uniswap-v3-math-primer-2#how-to-calculate-current-holdings
+        //Out of range, on the downside
+        if(currentTick < tickLower){
+            token0amount = SqrtPriceMath.getAmount0Delta(
+                sqrtPriceLower,
+                sqrtPriceUpper,
+                liquidity,
+                false
+            );
+            token1amount = 0;
+        //Out of range, on the upside
+        }else if(currentTick >= tickUpper){
+            token0amount = 0;
+            token1amount = SqrtPriceMath.getAmount1Delta(
+                sqrtPriceLower,
+                sqrtPriceUpper,
+                liquidity,
+                false
+            );
+        //in range position
+        }else{
+            token0amount = SqrtPriceMath.getAmount0Delta(
+                sqrtPriceX96,
+                sqrtPriceUpper,
+                liquidity,
+                false
+            );
+            token1amount = SqrtPriceMath.getAmount1Delta(
+                sqrtPriceLower,
+                sqrtPriceX96,
+                liquidity,
+                false
+            );
+        }
+    
+        //Use UD60x18 to convert token amount to decimal adjusted to avoid overflow errors
+        UD60x18 token0amountUD60x18 = UD60x18.wrap(token0amount).div(UD60x18.wrap(10**ERC20(Currency.unwrap(key.currency0)).decimals()));
+        UD60x18 token1amountUD60x18 = UD60x18.wrap(token1amount).div(UD60x18.wrap(10**ERC20(Currency.unwrap(key.currency1)).decimals()));
+
+        //Price feed from Chainlink, convert to UD60x18 to avoid overflow errors
+        UD60x18 ETHPrice = UD60x18.wrap(uint256(ETHPriceFeed.latestAnswer())).div(UD60x18.wrap(10**ETHPriceFeed.decimals()));
+        UD60x18 USDCPrice = UD60x18.wrap(uint256(USDCPriceFeed.latestAnswer())).div(UD60x18.wrap(10**USDCPriceFeed.decimals()));
+
+        //Price value of each token in the position
+        UD60x18 token0Price = token0amountUD60x18.mul(ETHPrice);
+        UD60x18 token1Price = token1amountUD60x18.mul(USDCPrice);
+       
+        //Price value of the position
+        console2.log("position price %e", (token0Price.add(token1Price)).unwrap()/(10**18));
+
+        //return price value of the position as UD60x18
+        return token0Price.add(token1Price);
+
+    }
+
     function _storeUserPosition(address user, IPoolManager.ModifyPositionParams calldata params) internal{
         //get user liquidity
         int24 tickLower = params.tickLower;
@@ -335,10 +415,40 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
             tickUpper
         );
 
-        console2.log("user liquidity", userLiquidity);
+        console2.log("user liquidity %e", userLiquidity);
         console2.log("user tick lower", tickLower);
         console2.log("user tick upper", tickUpper);
 
+    }
+
+    function _checkLiquidationsAfterSwap() internal{
+        for (uint i = 0; i < usersDebt.size(); i++) {
+            address key = usersDebt.getKeyAtIndex(i);
+
+            //check if user is liquidable
+            if(_getUserLiquidityPriceUSD(key).lte((UD60x18.wrap(usersDebt.get(key))).div(UD60x18.wrap(10**ERC20(gho).decimals())).mul(UD60x18.wrap(maxLTV)).div(UD60x18.wrap(100)))){ 
+                isUserLiquidable[key] = true;
+                _liquidateUser(key);
+        }
+    }
+    }
+
+    function _liquidateUser(address user) internal{
+        
+    }
+
+    function _canUserWithdraw(address user, int24 tickLower, int24 tickUpper, uint128 liquidity) internal view returns (bool){
+        console2.log("user debt before withdraw %e", usersDebt.get(user) / 10**18);
+        console2.log("user position price in USD before withdraw %e", _getUserLiquidityPriceUSD(user).unwrap() / 10**18);
+        console2.log("UDx60 debt %e" , UD60x18.wrap(usersDebt.get(user)).div(UD60x18.wrap((10**ERC20(gho).decimals()))).unwrap());
+        console2.log("UDx60 position price in USD %e", _getPositionUsdPrice(tickLower, tickUpper, liquidity).mul(UD60x18.wrap(maxLTV)).div(UD60x18.wrap(100)).unwrap());
+
+        //todo check formula for how much you can withdraw
+        if(UD60x18.wrap(2*usersDebt.get(user)).div(UD60x18.wrap((10**ERC20(gho).decimals()))).gte(_getPositionUsdPrice(tickLower, tickUpper, liquidity).mul(UD60x18.wrap(maxLTV)).div(UD60x18.wrap(100)))){
+            return false;
+        }else{
+            return true;
+        }
     }
 
 
