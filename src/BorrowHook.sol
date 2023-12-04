@@ -28,11 +28,21 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
     using PoolIdLibrary for IPoolManager.PoolKey;
     using IterableMapping for IterableMapping.Map;
 
+    // Modifier to check that the caller is the owner of
+    // the contract.
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Not owner");
+        // Underscore is a special character only used inside
+        // a function modifier and it tells Solidity to
+        // execute the rest of the code.
+        _;
+    }
+
     address public owner;
 
     uint8 maxLTV = 80; //80%
 
-    UD60x18 maxLTVUD60x18 = UD60x18.wrap(maxLTV).div(UD60x18.wrap(100));
+    UD60x18 maxLTVUD60x18 = UD60x18.wrap(maxLTV).div(UD60x18.wrap(100)); //80% as UD60x18
     uint256 minBorrowAmount = 1e18; //1 GHO
     address public gho = 0x40D16FC0246aD3160Ccc09B8D0D3A2cD28aE6C2f;
     address WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
@@ -121,7 +131,6 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
             //If user try to withdraw (delta negative) and has debt, revert
             uint256 liquidity = uint256(-params.liquidityDelta);
             console2.log("liquidity to withdraw %e", uint128(liquidity));
-            console2.log("can withdraw ? ", _canUserWithdraw(owner, params.tickLower, params.tickUpper, uint128(liquidity)));
             if(!_canUserWithdraw(owner, params.tickLower, params.tickUpper, uint128(liquidity))){
                  revert("Cannot Withdraw because LTV is inferior to min LTV"); //todo allow partial withdraw according to debt
             }
@@ -130,9 +139,7 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
             
 
         }
-        //store user position, don't matter if delta is negative since the function fetch actual liquidity from the pool itself
-        _storeUserPosition(owner, params); 
-        
+
         console2.log("beforeModifyPosition");
         return IHooks.beforeModifyPosition.selector;
     }
@@ -148,7 +155,7 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
         override
         returns (bytes4)
     {
-
+        //store user position
         _storeUserPosition(owner, params);
         console2.log("userPosition in usd %e", _getUserLiquidityPriceUSD(owner).unwrap() / 10**18);
         console2.log("afterModifyPosition");
@@ -239,14 +246,13 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
     function borrowGho(uint256 amount, address user) public returns (bool, uint256){
         //if amount is inferior to min amount, revert
         if(amount < minBorrowAmount){
-            revert("amount to borrow is inferior to 1 GHO");
+            revert("Borrow amount to borrow is inferior to 1 GHO");
         }
         //TODO : implement logic to check if user has enough collateral to borrow
-        console2.log("user price position before borrowing %e", _getUserLiquidityPriceUSD(user).unwrap() / 10**18);
-        console2.log("amount requested %e", amount);    
-        console2.log("Max borrow amount %e", _getUserLiquidityPriceUSD(user).sub((UD60x18.wrap(usersDebt.get(user))).div(UD60x18.wrap(10**ERC20(gho).decimals()))).mul(UD60x18.wrap(maxLTV)).div(UD60x18.wrap(100)).unwrap());
+        console2.log("Borrow amount requested %e", amount);    
+        console2.log("Max borrow amount %e", _getUserLiquidityPriceUSD(user).sub((UD60x18.wrap(usersDebt.get(user))).div(UD60x18.wrap(10**ERC20(gho).decimals()))).mul(maxLTVUD60x18).unwrap());
         //get user position price in USD, then check if borrow amount + debt already owed (adjusted to gho decimals) is inferior to maxLTV (80% = maxLTV/100)
-        if(_getUserLiquidityPriceUSD(user).lte((UD60x18.wrap((amount+ usersDebt.get(user))).div(UD60x18.wrap(10**ERC20(gho).decimals()))).mul(UD60x18.wrap(maxLTV)).div(UD60x18.wrap(100)))){ 
+        if(_getUserLiquidityPriceUSD(user).lte((UD60x18.wrap((amount+ usersDebt.get(user))).div(UD60x18.wrap(10**ERC20(gho).decimals()))).mul(maxLTVUD60x18))){ 
             revert("user LTV is superior to maximum LTV"); //TODO add proper error message
         }
         usersDebt.set(user, usersDebt.get(user) + amount);
@@ -280,67 +286,10 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
         
         IPoolManager.PoolKey memory key = _getPoolKey();
         (uint160 sqrtPriceX96, int24 currentTick, , , , ) = poolManager.getSlot0(key.toId()); //curent price and tick of the pool
+        //get user liquidity position stored when adding liquidity
         UserLiquidity memory userCurrentPosition = userPosition[user];
-        
-        //Lower and Upper tick of the position
-        uint160 sqrtPriceLower = TickMath.getSqrtRatioAtTick(userCurrentPosition.tickLower); //get price as decimal from Q64.96 format
-        uint160 sqrtPriceUpper = TickMath.getSqrtRatioAtTick(userCurrentPosition.tickUpper);
-        uint256 token0amount;
-        uint256 token1amount;
 
-
-        //Price calculations on https://blog.uniswap.org/uniswap-v3-math-primer-2#how-to-calculate-current-holdings
-        //Out of range, on the downside
-        if(currentTick < userCurrentPosition.tickLower){
-            token0amount = SqrtPriceMath.getAmount0Delta(
-                sqrtPriceLower,
-                sqrtPriceUpper,
-                userCurrentPosition.liquidity,
-                false
-            );
-            token1amount = 0;
-        //Out of range, on the upside
-        }else if(currentTick >= userCurrentPosition.tickUpper){
-            token0amount = 0;
-            token1amount = SqrtPriceMath.getAmount1Delta(
-                sqrtPriceLower,
-                sqrtPriceUpper,
-                userCurrentPosition.liquidity,
-                false
-            );
-        //in range position
-        }else{
-            token0amount = SqrtPriceMath.getAmount0Delta(
-                sqrtPriceX96,
-                sqrtPriceUpper,
-                userCurrentPosition.liquidity,
-                false
-            );
-            token1amount = SqrtPriceMath.getAmount1Delta(
-                sqrtPriceLower,
-                sqrtPriceX96,
-                userCurrentPosition.liquidity,
-                false
-            );
-        }
-    
-        //Use UD60x18 to convert token amount to decimal adjusted to avoid overflow errors
-        UD60x18 token0amountUD60x18 = UD60x18.wrap(token0amount).div(UD60x18.wrap(10**ERC20(Currency.unwrap(key.currency0)).decimals()));
-        UD60x18 token1amountUD60x18 = UD60x18.wrap(token1amount).div(UD60x18.wrap(10**ERC20(Currency.unwrap(key.currency1)).decimals()));
-
-        //Price feed from Chainlink, convert to UD60x18 to avoid overflow errors
-        UD60x18 ETHPrice = UD60x18.wrap(uint256(ETHPriceFeed.latestAnswer())).div(UD60x18.wrap(10**ETHPriceFeed.decimals()));
-        UD60x18 USDCPrice = UD60x18.wrap(uint256(USDCPriceFeed.latestAnswer())).div(UD60x18.wrap(10**USDCPriceFeed.decimals()));
-
-        //Price value of each token in the position
-        UD60x18 token0Price = token0amountUD60x18.mul(ETHPrice);
-        UD60x18 token1Price = token1amountUD60x18.mul(USDCPrice);
-       
-        //Price value of the position
-        console2.log("position price not decimal adjusted %e", (token0Price.add(token1Price)).unwrap());
-
-        //return price value of the position as UD60x18
-        return token0Price.add(token1Price);
+        return _getPositionUsdPrice(userCurrentPosition.tickLower, userCurrentPosition.tickUpper, userCurrentPosition.liquidity);
     }   
 
 
@@ -400,10 +349,7 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
         //Price value of each token in the position
         UD60x18 token0Price = token0amountUD60x18.mul(ETHPrice);
         UD60x18 token1Price = token1amountUD60x18.mul(USDCPrice);
-       
-        //Price value of the position
-        console2.log("position price %e", (token0Price.add(token1Price)).unwrap()/(10**18));
-
+      
         //return price value of the position as UD60x18
         return token0Price.add(token1Price);
 
@@ -424,9 +370,6 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
             tickUpper
         );
 
-        console2.log("user liquidity %e", userLiquidity);
-        console2.log("user tick lower", tickLower);
-        console2.log("user tick upper", tickUpper);
 
     }
 
@@ -435,7 +378,7 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
             address key = usersDebt.getKeyAtIndex(i);
 
             //check if user is liquidable
-            if(_getUserLiquidityPriceUSD(key).lte((UD60x18.wrap(usersDebt.get(key))).div(UD60x18.wrap(10**ERC20(gho).decimals())).mul(UD60x18.wrap(maxLTV)).div(UD60x18.wrap(100)))){ 
+            if(_getUserLiquidityPriceUSD(key).mul(maxLTVUD60x18).lte((UD60x18.wrap(usersDebt.get(key))).div(UD60x18.wrap(10**ERC20(gho).decimals())))){ 
                 isUserLiquidable[key] = true;
                 _liquidateUser(key);
         }
@@ -446,25 +389,29 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
         
     }
 
+    function getUserPositonPriceUSD(address user) public view returns (uint256){
+        return _getUserLiquidityPriceUSD(user).unwrap() / 10**18;
+    }
+
+    function getUserCurrentLTV(address user) public view returns (uint256){
+        UD60x18 userPositionValueUDx60 = _getUserLiquidityPriceUSD(user); //user position value
+        UD60x18 userDebtUDx60 = UD60x18.wrap(usersDebt.get(user)).div(UD60x18.wrap(10**ERC20(gho).decimals())); //user debt, adjusted to gho decimals
+
+        return userDebtUDx60.div(userPositionValueUDx60).mul(UD60x18.wrap(100)).unwrap(); //return LTV 0 < LTV < 100
+    }
+
     function _canUserWithdraw(address user, int24 tickLower, int24 tickUpper, uint128 liquidity) internal view returns (bool){
-        console2.log("user liquidity withdraw %e", liquidity);
-        console2.log("user debt before withdraw %e", usersDebt.get(user) / 10**18);
-        console2.log("user position price in USD before withdraw %e", _getUserLiquidityPriceUSD(user).unwrap() / 10**18);
-        console2.log("UDx60 debt %e" , UD60x18.wrap(usersDebt.get(user)).div(UD60x18.wrap((10**ERC20(gho).decimals()))).unwrap());
-
         //check if debt / (position price - withdraw liquidity amount) is inferior to maxLTV (=77%)
+        console2.log("user debt before trying withdraw %e", usersDebt.get(user) / 10**18);
         console2.log("position value user wants to withdraw %e", _getPositionUsdPrice(tickLower, tickUpper, liquidity).unwrap()/ 10**18);
-
+        //Theorically, position value after withdraw should be superior to 0, but we check just in case
         UD60x18 _positionValueAfterWithdraw = _getUserLiquidityPriceUSD(user).gte(_getPositionUsdPrice(tickLower, tickUpper, liquidity)) ? _getUserLiquidityPriceUSD(user).sub(_getPositionUsdPrice(tickLower, tickUpper, liquidity)) : UD60x18.wrap(0);
-        console2.log("UDx60 position value after withdraw %e", _positionValueAfterWithdraw.unwrap());
-        console2.log("ahahahah  ", _positionValueAfterWithdraw.isZero());
+        
         if(_positionValueAfterWithdraw.isZero() && usersDebt.get(user) == 0){
             //If user has no debt and withdraw all his position, he can withdraw
-            console2.log("case 1");
             return true;
         }else if(_positionValueAfterWithdraw.isZero() && usersDebt.get(user) > 0){
             //If user has debt and withdraw all his position, he cannot withdraw
-            console2.log("case 2");
             return false;
         }
         if(!_positionValueAfterWithdraw.isZero() && (UD60x18.wrap(usersDebt.get(user)).div(UD60x18.wrap((10**ERC20(gho).decimals()))).div(_positionValueAfterWithdraw).lte(maxLTVUD60x18))){
@@ -474,6 +421,11 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
             //unhandled case, default to false to avoid user withdrawing more than he should
             return false;
         }
+    }
+
+    function modifyPriceFeed(address _ETHPriceFeed, address _USDCPriceFeed) public onlyOwner{
+        ETHPriceFeed = EACAggregatorProxy(_ETHPriceFeed);
+        USDCPriceFeed = EACAggregatorProxy(_USDCPriceFeed);
     }
 
 
