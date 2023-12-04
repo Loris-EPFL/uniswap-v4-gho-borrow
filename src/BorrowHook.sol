@@ -31,6 +31,8 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
     address public owner;
 
     uint8 maxLTV = 80; //80%
+
+    UD60x18 maxLTVUD60x18 = UD60x18.wrap(maxLTV).div(UD60x18.wrap(100));
     uint256 minBorrowAmount = 1e18; //1 GHO
     address public gho = 0x40D16FC0246aD3160Ccc09B8D0D3A2cD28aE6C2f;
     address WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
@@ -110,10 +112,12 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
     )
         external
         override
+        view
         returns (bytes4)
     {
 
-        
+        console2.log("beforeModifyPosition");
+
         if(params.liquidityDelta < 0 ){
             //If user try to withdraw (delta negative) and has debt, revert
             uint256 liquidity = uint256(-params.liquidityDelta);
@@ -124,7 +128,6 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
             }
         }
         
-        console2.log("beforeModifyPosition");
         return IHooks.beforeModifyPosition.selector;
     }
 
@@ -328,7 +331,7 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
         UD60x18 token1Price = token1amountUD60x18.mul(USDCPrice);
        
         //Price value of the position
-        console2.log("position price %e", (token0Price.add(token1Price)).unwrap()/(10**18));
+        console2.log("position price not decimal adjusted %e", (token0Price.add(token1Price)).unwrap());
 
         //return price value of the position as UD60x18
         return token0Price.add(token1Price);
@@ -438,16 +441,32 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
     }
 
     function _canUserWithdraw(address user, int24 tickLower, int24 tickUpper, uint128 liquidity) internal view returns (bool){
+        console2.log("user liquidity withdraw %e", liquidity);
         console2.log("user debt before withdraw %e", usersDebt.get(user) / 10**18);
         console2.log("user position price in USD before withdraw %e", _getUserLiquidityPriceUSD(user).unwrap() / 10**18);
         console2.log("UDx60 debt %e" , UD60x18.wrap(usersDebt.get(user)).div(UD60x18.wrap((10**ERC20(gho).decimals()))).unwrap());
-        console2.log("UDx60 position price in USD %e", _getPositionUsdPrice(tickLower, tickUpper, liquidity).mul(UD60x18.wrap(maxLTV)).div(UD60x18.wrap(100)).unwrap());
 
-        //todo check formula for how much you can withdraw
-        if(UD60x18.wrap(2*usersDebt.get(user)).div(UD60x18.wrap((10**ERC20(gho).decimals()))).gte(_getPositionUsdPrice(tickLower, tickUpper, liquidity).mul(UD60x18.wrap(maxLTV)).div(UD60x18.wrap(100)))){
-            return false;
-        }else{
+        //check if debt / (position price - withdraw liquidity amount) is inferior to maxLTV (=77%)
+        console2.log("position value user wants to withdraw %e", _getPositionUsdPrice(tickLower, tickUpper, liquidity).unwrap()/ 10**18);
+
+        UD60x18 _positionValueAfterWithdraw = _getUserLiquidityPriceUSD(user).gte(_getPositionUsdPrice(tickLower, tickUpper, liquidity)) ? _getUserLiquidityPriceUSD(user).sub(_getPositionUsdPrice(tickLower, tickUpper, liquidity)) : UD60x18.wrap(0);
+        console2.log("UDx60 position value after withdraw %e", _positionValueAfterWithdraw.unwrap());
+        console2.log("ahahahah  ", _positionValueAfterWithdraw.isZero());
+        if(_positionValueAfterWithdraw.isZero() && usersDebt.get(user) == 0){
+            //If user has no debt and withdraw all his position, he can withdraw
+            console2.log("case 1");
             return true;
+        }else if(_positionValueAfterWithdraw.isZero() && usersDebt.get(user) > 0){
+            //If user has debt and withdraw all his position, he cannot withdraw
+            console2.log("case 2");
+            return false;
+        }
+        if(!_positionValueAfterWithdraw.isZero() && (UD60x18.wrap(usersDebt.get(user)).div(UD60x18.wrap((10**ERC20(gho).decimals()))).div(_positionValueAfterWithdraw).lte(maxLTVUD60x18))){
+            //If user has debt and withdraw part of his position, check if debt / (position price - withdraw liquidity amount) is inferior to maxLTV (=77%)
+            return true;
+        }else{
+            //unhandled case, default to false to avoid user withdrawing more than he should
+            return false;
         }
     }
 
