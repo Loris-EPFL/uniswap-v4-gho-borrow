@@ -149,9 +149,6 @@ contract UniswapHooksTest is PRBTest, StdCheats {
         (uint160 sqrtPriceX96Current, int24 currentTick, , , , ) = poolManager.getSlot0(PoolIdLibrary.toId(key));
         uint160 maxSlippage = 2;
 
-
-
-
         // opposite action: poolManager.swap(key, IPoolManager.SwapParams(true, 100, TickMath.MIN_SQRT_RATIO * 1000));
         poolManager.swap(key, IPoolManager.SwapParams(false, 1e8, sqrtPriceX96Current + sqrtPriceX96Current*maxSlippage/100)); //false = buy eth with usdc
 
@@ -179,20 +176,26 @@ contract UniswapHooksTest is PRBTest, StdCheats {
 
         //test withdraw while having debt
         //poolManager.modifyPosition(key, IPoolManager.ModifyPositionParams(-60*100, 60*6, -52e9)); //manage ranges with ticks
-        poolManager.modifyPosition(key, IPoolManager.ModifyPositionParams(-60*100, 60*6, -20e13)); //manage ranges with ticks
+
+        //will revert if withdraw liquidity amount is superior to liquidity already in position amount
+        poolManager.modifyPosition(key, IPoolManager.ModifyPositionParams(-60*100, 60*6, -10e10)); //manage ranges with ticks
 
         _settleTokenBalance(Currency.wrap(address(WETH)));
         _settleTokenBalance(Currency.wrap(address(USDC)));
 
+
         
-
-       
-
-       
-
         //test view gho debt after repaying
         debt = deployedHooks.viewGhoDebt(address(this));
         console2.log("GHO debt after repaying of this test %e", debt);
+
+
+        //swap 3
+        //poolManager.swap(key, IPoolManager.SwapParams(false, 1e6, sqrtPriceX96Current + sqrtPriceX96Current*maxSlippage/100)); //false = buy eth with usdc
+
+
+        _settleTokenBalance(Currency.wrap(address(WETH)));
+        _settleTokenBalance(Currency.wrap(address(USDC)));
 
 
 

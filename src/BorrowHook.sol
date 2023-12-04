@@ -90,7 +90,7 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
 
     /// @inheritdoc IHooks
     function afterInitialize(
-        address, // sender
+        address , // sender
         IPoolManager.PoolKey calldata, // key
         uint160, // sqrtPriceX96
         int24 // tick
@@ -112,11 +112,10 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
     )
         external
         override
-        view
         returns (bytes4)
     {
 
-        console2.log("beforeModifyPosition");
+        
 
         if(params.liquidityDelta < 0 ){
             //If user try to withdraw (delta negative) and has debt, revert
@@ -124,10 +123,17 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
             console2.log("liquidity to withdraw %e", uint128(liquidity));
             console2.log("can withdraw ? ", _canUserWithdraw(owner, params.tickLower, params.tickUpper, uint128(liquidity)));
             if(!_canUserWithdraw(owner, params.tickLower, params.tickUpper, uint128(liquidity))){
-                 revert("user has debt, cannot withdraw"); //todo allow partial withdraw according to debt
+                 revert("Cannot Withdraw because LTV is inferior to min LTV"); //todo allow partial withdraw according to debt
             }
+
+
+            
+
         }
+        //store user position, don't matter if delta is negative since the function fetch actual liquidity from the pool itself
+        _storeUserPosition(owner, params); 
         
+        console2.log("beforeModifyPosition");
         return IHooks.beforeModifyPosition.selector;
     }
 
