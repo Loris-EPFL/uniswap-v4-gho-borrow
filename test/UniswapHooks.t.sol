@@ -193,6 +193,10 @@ contract UniswapHooksTest is PRBTest, StdCheats {
         debt = deployedHooks.viewGhoDebt(address(this));
         console2.log("GHO debt after repaying of this test %e", debt);
 
+        //liquidation test
+        //address alice = makeAddr("alice");
+        //deployedHooks.liquidateUser(address(this), address(alice));
+        //console2.log("alice usdc balance after liquidation %e", token2.balanceOf(address(alice)));  
 
         //swap 3
         poolManager.swap(key, IPoolManager.SwapParams(false, 1e11, sqrtPriceX96Current + sqrtPriceX96Current*maxSlippage/100)); //false = buy eth with usdc

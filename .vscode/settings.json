@@ -18,6 +18,8 @@
     "@aave/v3-periphery/=lib/aave-v3-periphery/",
     "@openzeppelin/=lib/openzeppelin-contracts/",
     "@aave/gho/=lib/gho-core/src/contracts/",
-    "@prb-math/=lib/prb-math/src/"
+    "@prb-math/=lib/prb-math/src/",
+    "@chainlink/=lib/chainlink/contracts/",
+    "@openzeppelin-upgreadable/=lib/openzeppelin-contracts-upgreadable/"
   ]
 }

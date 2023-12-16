@@ -189,7 +189,7 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
         returns (bytes4)
     {
         console2.log("afterSwap");
-        console2.log("user position price in USD after swap %e", _getUserLiquidityPriceUSD(sender).unwrap() / 10**18);
+        console2.log("User position price in USD after swap %e", _getUserLiquidityPriceUSD(sender).unwrap() / 10**18);
         return IHooks.afterSwap.selector;
     }
 
@@ -373,20 +373,8 @@ contract BorrowHook is BaseHook, IHookFeeManager, IDynamicFeeManager {
 
     }
 
-    function _checkLiquidationsAfterSwap() internal{
-        for (uint i = 0; i < usersDebt.size(); i++) {
-            address key = usersDebt.getKeyAtIndex(i);
-
-            //check if user is liquidable
-            if(_getUserLiquidityPriceUSD(key).mul(maxLTVUD60x18).lte((UD60x18.wrap(usersDebt.get(key))).div(UD60x18.wrap(10**ERC20(gho).decimals())))){ 
-                isUserLiquidable[key] = true;
-                _liquidateUser(key);
-        }
-    }
-    }
-
-    function _liquidateUser(address user) internal{
-        
+    function liquidateUser(address user, address liquidator) public{
+        poolManager.take(Currency.wrap(address(USDC)), address(this), 1);
     }
 
     function getUserPositonPriceUSD(address user) public view returns (uint256){
