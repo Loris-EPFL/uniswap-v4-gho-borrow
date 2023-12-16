@@ -7,7 +7,7 @@
   },
   "npm.exclude": "**/lib/**",
   "solidity.formatter": "forge",
-  "woke.compiler.solc.remappings": [
+  "wake.compiler.solc.remappings": [
     "@prb/test/=lib/prb-test/src/",
     "forge-std/=lib/forge-std/src/",
     "@uniswap/v4-core/=lib/v4-periphery/lib/v4-core/",
@@ -17,6 +17,9 @@
     "@aave/core-v3/=lib/aave-v3-core/",
     "@aave/v3-periphery/=lib/aave-v3-periphery/",
     "@openzeppelin/=lib/openzeppelin-contracts/",
-    "@aave/gho/=lib/gho-core/src/contracts/"
+    "@aave/gho/=lib/gho-core/src/contracts/",
+    "@prb-math/=lib/prb-math/src/",
+    "@chainlink/=lib/chainlink/contracts/",
+    "@openzeppelin-upgreadable/=lib/openzeppelin-contracts-upgreadable/"
   ]
 }

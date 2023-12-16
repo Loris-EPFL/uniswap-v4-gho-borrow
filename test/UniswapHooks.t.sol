@@ -7,23 +7,41 @@ import { StdCheats } from "forge-std/StdCheats.sol";
 
 import { PoolManager, Currency } from "@uniswap/v4-core/contracts/PoolManager.sol";
 import { TickMath } from "@uniswap/v4-core/contracts/libraries/TickMath.sol";
-import { Fees } from "@uniswap/core-v4/contracts/Fees.sol";
-import { CurrencyLibrary } from "@uniswap/core-v4/contracts/types/Currency.sol";
+import { Fees } from "@uniswap/v4-core/contracts/libraries/Fees.sol";
+import { CurrencyLibrary } from "@uniswap/v4-core/contracts/libraries/CurrencyLibrary.sol";
 import { TestERC20 } from "@uniswap/v4-core/contracts/test/TestERC20.sol";
+import {MockERC20} from "@uniswap/v4-core/test/foundry-tests/utils/MockERC20.sol";
 import {
     IPoolManager, Hooks, IHooks, BaseHook, BalanceDelta
 } from "@uniswap-periphery/v4-periphery/contracts/BaseHook.sol";
 
 import { UniswapHooksFactory } from "../src/UniswapHooksFactory.sol";
+import {IPool} from "@aave/core-v3/contracts/interfaces/IPool.sol";
+import {IAToken} from "@aave/core-v3/contracts/interfaces/IAToken.sol";
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {InitPoolTest} from "./InitPool.t.sol";
+import {IGhoToken} from '@aave/gho/gho/interfaces/IGhoToken.sol';
+import {PoolIdLibrary} from "@uniswap/v4-core/contracts/libraries/PoolId.sol";
+import {BorrowHook} from "../src/BorrowHook.sol";
+
+
 
 using CurrencyLibrary for Currency;
 
 contract UniswapHooksTest is PRBTest, StdCheats {
     UniswapHooksFactory internal uniswapHooksFactory;
-    TestERC20 internal token1;
-    TestERC20 internal token2;
-    IHooks internal deployedHooks;
+    MockERC20 internal token1;
+    MockERC20 internal token2;
+    BorrowHook internal deployedHooks;
     IPoolManager internal poolManager;
+
+    
+    address WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+    address USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
+    address gho = 0x40D16FC0246aD3160Ccc09B8D0D3A2cD28aE6C2f;
+
+   
+
 
     function setUp() public virtual {
         uniswapHooksFactory = new UniswapHooksFactory();
@@ -41,14 +59,30 @@ contract UniswapHooksTest is PRBTest, StdCheats {
             if (_doesAddressStartWith(expectedAddress, 0xff)) {
                 console2.log("Found hook address", expectedAddress, "with salt of", i);
 
-                deployedHooks = IHooks(uniswapHooksFactory.deploy(owner, poolManager, salt));
+                deployedHooks = BorrowHook(uniswapHooksFactory.deploy(owner, poolManager, salt));
                 assertEq(address(deployedHooks), expectedAddress, "address is not as expected");
 
                 // Let's test all the hooks
 
+                IPoolManager.PoolKey memory key = _getPoolKey();
+
+
+
                 // First we need two tokens
-                token1 = new TestERC20(3000);
-                token2 = new TestERC20(3000);
+                token1 = MockERC20(Currency.unwrap(key.currency0));
+                token2 = MockERC20(Currency.unwrap(key.currency1));
+                
+                //call the mint token helper function to freemint tokens
+                _mintTokens();
+
+                //add hook as faciliator
+               AddFacilitator(address(deployedHooks));
+
+               (uint256 bukcet, ) = IGhoToken(gho).getFacilitatorBucket(address(deployedHooks));
+
+                console2.log("bucket capacity", bukcet);
+
+               
                 token1.approve(address(poolManager), type(uint256).max);
                 token2.approve(address(poolManager), type(uint256).max);
 
@@ -63,18 +97,127 @@ contract UniswapHooksTest is PRBTest, StdCheats {
         revert("No salt found");
     }
 
+
     function lockAcquired(uint256, bytes calldata) external returns (bytes memory) {
         IPoolManager.PoolKey memory key = _getPoolKey();
+       
+
+        // First we need two tokens
+        token1 = MockERC20(Currency.unwrap(key.currency0));
+        token2 = MockERC20(Currency.unwrap(key.currency1));
+
+        token1.approve(address(poolManager), type(uint256).max);
+        token2.approve(address(poolManager), type(uint256).max);
+
+        console2.log("Token1 balance before providing liquidity %e", token1.balanceOf(address(this)));
+        console2.log("Token2 balance before providing liquidity %e", token2.balanceOf(address(this)));
+
+
 
         // lets execute all remaining hooks
-        poolManager.modifyPosition(key, IPoolManager.ModifyPositionParams(TickMath.MIN_TICK, TickMath.MAX_TICK, 1000));
-        poolManager.donate(key, 100, 100);
+        poolManager.modifyPosition(key, IPoolManager.ModifyPositionParams(-60*100, 60*6, 20e10)); //manage ranges with ticks
+
+        _settleTokenBalance(Currency.wrap(address(WETH)));
+        _settleTokenBalance(Currency.wrap(address(USDC)));
+
+        poolManager.donate(key, 1e8, 1e8);
+
+        console2.log("Token1 balance after providing liquidity %e", token1.balanceOf(address(this)));
+        console2.log("Token2 balance after providing liquidity %e", token2.balanceOf(address(this)));
+
+
+
+        //test borrow gho
+        
+        //address alice = makeAddr("alice");
+        uint256 ghoBorrowAmount = 30000e18;
+        deployedHooks.borrowGho(ghoBorrowAmount, address(this));
+        console2.log("GHO balance of this test %e", IGhoToken(gho).balanceOf(address(this)));
+        
+        //test view gho debt
+        uint256 debt = deployedHooks.viewGhoDebt(address(this));
+        console2.log("GHO debt of this test %e", debt);
+
+        
+        
+
+    
+        //swap 1
+        console2.log("Token1 balance before swap %e", token1.balanceOf(address(this)));
+        console2.log("Token2 balance before swap %e", token2.balanceOf(address(this)));
+
+        (uint160 sqrtPriceX96Current, int24 currentTick, , , , ) = poolManager.getSlot0(PoolIdLibrary.toId(key));
+        uint160 maxSlippage = 10;
 
         // opposite action: poolManager.swap(key, IPoolManager.SwapParams(true, 100, TickMath.MIN_SQRT_RATIO * 1000));
-        poolManager.swap(key, IPoolManager.SwapParams(false, 100, TickMath.MAX_SQRT_RATIO / 1000));
+        poolManager.swap(key, IPoolManager.SwapParams(false, 1e8, sqrtPriceX96Current + sqrtPriceX96Current*maxSlippage/100)); //false = buy eth with usdc
 
-        _settleTokenBalance(Currency.wrap(address(token1)));
-        _settleTokenBalance(Currency.wrap(address(token2)));
+
+        _settleTokenBalance(Currency.wrap(address(WETH)));
+        _settleTokenBalance(Currency.wrap(address(USDC)));
+
+
+        console2.log("Token1 balance after swap 1 %e", token1.balanceOf(address(this)));
+        console2.log("Token2 balance after swap  1 %e", token2.balanceOf(address(this)));
+
+        //swap 2
+        poolManager.swap(key, IPoolManager.SwapParams(true, 1e9, sqrtPriceX96Current - sqrtPriceX96Current*maxSlippage/100)); //true = sell eth for usdc
+
+        _settleTokenBalance(Currency.wrap(address(WETH)));
+        _settleTokenBalance(Currency.wrap(address(USDC)));
+
+
+        console2.log("Token1 balance after swap 2 %e", token1.balanceOf(address(this)));
+        console2.log("Token2 balance after swap 2 %e", token2.balanceOf(address(this)));
+
+        //test to see user position in USD
+        console2.log("user positon in USD from test %e ", deployedHooks.getUserPositonPriceUSD(address(this)));
+
+        //test to see user current LTV
+        console2.log("user current LTV from test %e ", deployedHooks.getUserCurrentLTV(address(this)));
+
+        poolManager.modifyPosition(key, IPoolManager.ModifyPositionParams(-60*100, 60*6, -5e10)); //manage ranges with ticks
+
+        _settleTokenBalance(Currency.wrap(address(WETH)));
+        _settleTokenBalance(Currency.wrap(address(USDC)));
+
+         //test repay gho
+        ERC20(gho).approve(address(deployedHooks), type(uint256).max);
+        deployedHooks.repayGho(debt, address(this));
+
+        //test withdraw while having debt
+        //poolManager.modifyPosition(key, IPoolManager.ModifyPositionParams(-60*100, 60*6, -52e9)); //manage ranges with ticks
+
+        
+        //test view gho debt after repaying
+        debt = deployedHooks.viewGhoDebt(address(this));
+        console2.log("GHO debt after repaying of this test %e", debt);
+
+        //liquidation test
+        //address alice = makeAddr("alice");
+        //deployedHooks.liquidateUser(address(this), address(alice));
+        //console2.log("alice usdc balance after liquidation %e", token2.balanceOf(address(alice)));  
+
+        //swap 3
+        poolManager.swap(key, IPoolManager.SwapParams(false, 1e11, sqrtPriceX96Current + sqrtPriceX96Current*maxSlippage/100)); //false = buy eth with usdc
+
+
+        _settleTokenBalance(Currency.wrap(address(WETH)));
+        _settleTokenBalance(Currency.wrap(address(USDC)));
+
+
+        console2.log("Token1 balance after swap 3 %e", token1.balanceOf(address(this)));
+        console2.log("Token2 balance after swap 3 %e", token2.balanceOf(address(this)));
+
+
+        //will revert if withdraw liquidity amount is superior to liquidity already in position amount
+        poolManager.modifyPosition(key, IPoolManager.ModifyPositionParams(-60*100, 60*6, -10e10)); //manage ranges with ticks
+
+        _settleTokenBalance(Currency.wrap(address(WETH)));
+        _settleTokenBalance(Currency.wrap(address(USDC)));
+
+       
+
 
         return new bytes(0);
     }
@@ -91,23 +234,55 @@ contract UniswapHooksTest is PRBTest, StdCheats {
             return;
         }
 
-        //token.transfer(address(poolManager), uint256(unsettledTokenBalance));
+        token.transfer(address(poolManager), uint256(unsettledTokenBalance));
         poolManager.settle(token);
     }
 
     function _getPoolKey() private view returns (IPoolManager.PoolKey memory) {
-        /*
         return IPoolManager.PoolKey({
-            currency0: Currency.wrap(address(token1)),
-            currency1: Currency.wrap(address(token2)),
+            currency0: Currency.wrap(address(WETH)),
+            currency1: Currency.wrap(address(USDC)),
             fee: Fees.DYNAMIC_FEE_FLAG + Fees.HOOK_SWAP_FEE_FLAG + Fees.HOOK_WITHDRAW_FEE_FLAG, // 0xE00000 = 111
-            tickSpacing: 1,
-            hooks: IHooks(deployedHooks)
+            tickSpacing: 60,
+            hooks: BorrowHook(deployedHooks)
         });
-        */
     }
 
     function _doesAddressStartWith(address _address, uint160 _prefix) private pure returns (bool) {
         return uint160(_address) / (2 ** (8 * (19))) == _prefix;
+    }
+
+    //helper function to mint Aave Aeth and Ausdc tokens from Aave lendingPool
+    function _mintTokens() internal{
+        address WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+        address USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
+        address owner = 0x388C818CA8B9251b393131C08a736A67ccB19297;
+ 
+        //mint Aeth and Ausdc by depositing into pool
+        deal(WETH, address(this), 10e18);
+        deal(USDC, address(this), 100000e6);
+
+        console2.log("hook's WETH balance", ERC20(WETH).balanceOf(address(this)));
+        console2.log("hook's USDC balance", ERC20(USDC).balanceOf(address(this)));
+    
+    }
+
+    //Helper function to add hook as faciliator
+    function AddFacilitator(address faciliator) public{
+        //need FACILITATOR_MANAGER_ROLE to address to add hook as faciliator
+        address whitelistedManager = 0x5300A1a15135EA4dc7aD5a167152C01EFc9b192A; //whitelisted address of aave dao
+
+        bytes32 FacilitatorRole = (IGhoToken(gho).FACILITATOR_MANAGER_ROLE());
+
+        
+        address hookAddress = address(this);
+        uint128 bucketCapacity = 100000e18;
+        vm.startPrank(whitelistedManager);
+        IGhoToken(gho).addFacilitator(faciliator, "BorrowHook", bucketCapacity);
+       
+        vm.stopPrank();
+
+        console2.log("GHO balance", IGhoToken(gho).balanceOf(hookAddress));
+
     }
 }
