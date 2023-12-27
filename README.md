@@ -9,7 +9,10 @@
 [license]: https://opensource.org/licenses/MIT
 [license-badge]: https://img.shields.io/badge/License-MIT-blue.svg
 
-Uniswap v4 custom pool template for Foundry based on [foundry-template](https://github.com/PaulRBerg/foundry-template).
+Uniswap v4 custom pool that allosw a user to mint GHO based on a template for Foundry[foundry-template](https://github.com/PaulRBerg/foundry-template).
+
+See the full project report at : [GHOOK_Bachelor_Project_Report.pdf](https://github.com/Loris-EPFL/uniswap-v4-gho-borrow/files/13778309/GHOOK_Bachelor_Project_Report.pdf)
+
 
 Full blog post with more details about Uniswap 4 and hooks available at
 [https://soliditydeveloper.com/uniswap4](https://soliditydeveloper.com/uniswap4).
